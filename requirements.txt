@@ -1,0 +1,8 @@
+tqdm
+matplotlib
+ifcfg
+opencv_python
+attr
+einops
+tensorboard
+jsonlines

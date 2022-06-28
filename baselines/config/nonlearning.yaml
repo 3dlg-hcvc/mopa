@@ -1,0 +1,16 @@
+BASE_TASK_CONFIG_PATH: multion/config/multion_3on.yaml
+LOG_FILE: non_learning.log
+LOG_INTERVAL: 1
+VIDEO_OPTION: ["disk"]  # options: "disk", "tensorboard"
+VIDEO_DIR: experiments/non_learning/testing/3on/videos
+RESULTS_DIR: experiments/non_learning/testing/3on
+
+EVAL:
+    SPLIT: train
+    # any num greater than the actual episode count evals every episode
+    EPISODE_COUNT: 20
+    EVAL_NONLEARNING: True
+    NONLEARNING:
+        # OracleAgent or RandomAgent or HandcraftedAgent
+        AGENT: OracleAgent
+
