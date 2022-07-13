@@ -53,6 +53,17 @@ from habitat_baselines.common.obs_transformers import (
 )
 from habitat.utils import profiling_wrapper
 from habitat.utils.render_wrapper import overlay_frame
+from habitat_baselines.rl.ddppo.ddp_utils import (
+    EXIT,
+    add_signal_handlers,
+    get_distrib_size,
+    init_distrib_slurm,
+    is_slurm_batch_job,
+    rank0_only,
+    requeue_job,
+    load_resume_state,
+    save_resume_state
+)
 
 
 @baseline_registry.register_trainer(name="non-oracle")
@@ -189,6 +200,15 @@ class PPOTrainerNO(BaseRLTrainerNonOracle):
                 results[k].append(v)
 
         return results
+
+    def percent_done(self) -> float:
+        if self.config.NUM_UPDATES != -1:
+            return self.num_updates_done / self.config.NUM_UPDATES
+        else:
+            return self.num_steps_done / self.config.TOTAL_NUM_STEPS
+
+    def is_done(self) -> bool:
+        return self.percent_done() >= 1.0
 
     def _collect_rollout_step(
         self, rollouts, current_episode_reward, running_episode_stats
@@ -364,6 +384,7 @@ class PPOTrainerNO(BaseRLTrainerNonOracle):
         t_start = time.time()
         env_time = 0
         pth_time = 0
+        prev_time = 0
         count_steps = 0
         count_checkpoints = 0
 
@@ -371,11 +392,35 @@ class PPOTrainerNO(BaseRLTrainerNonOracle):
             optimizer=self.agent.optimizer,
             lr_lambda=lambda x: linear_decay(x, self.config.NUM_UPDATES),
         )
+        
+        resume_state = load_resume_state(self.config)
+        if resume_state is not None:
+            self.agent.load_state_dict(resume_state["state_dict"])
+            self.agent.optimizer.load_state_dict(resume_state["optim_state"])
+            lr_scheduler.load_state_dict(resume_state["lr_sched_state"])
+
+            requeue_stats = resume_state["requeue_stats"]
+            env_time = requeue_stats["env_time"]
+            pth_time = requeue_stats["pth_time"]
+            count_steps = requeue_stats["count_steps"]
+            self.num_updates_done = requeue_stats["num_updates_done"]
+            _last_checkpoint_percent = requeue_stats[
+                "_last_checkpoint_percent"
+            ]
+            count_checkpoints = requeue_stats["count_checkpoints"]
+            prev_time = requeue_stats["prev_time"]
+
+            running_episode_stats = requeue_stats["running_episode_stats"]
+            window_episode_stats.update(
+                requeue_stats["window_episode_stats"]
+            )
+        add_signal_handlers()
 
         with TensorboardWriter(
             self.config.TENSORBOARD_DIR, flush_secs=self.flush_secs
         ) as writer:
-            for update in range(self.config.NUM_UPDATES):
+            for update in range(self.num_updates_done, self.config.NUM_UPDATES):
+                self.num_updates_done = update
                 if ppo_cfg.use_linear_lr_decay:
                     lr_scheduler.step()
 
@@ -383,6 +428,39 @@ class PPOTrainerNO(BaseRLTrainerNonOracle):
                     self.agent.clip_param = ppo_cfg.clip_param * linear_decay(
                         update, self.config.NUM_UPDATES
                     )
+                    
+                if rank0_only() and self._should_save_resume_state():
+                    requeue_stats = dict(
+                        env_time=env_time,
+                        pth_time=pth_time,
+                        count_checkpoints=count_checkpoints,
+                        count_steps=count_steps,
+                        num_updates_done=self.num_updates_done,
+                        _last_checkpoint_percent=self._last_checkpoint_percent,
+                        prev_time=(time.time() - t_start) + prev_time,
+                        running_episode_stats=running_episode_stats,
+                        window_episode_stats=dict(window_episode_stats),
+                    )
+
+                    save_resume_state(
+                        dict(
+                            state_dict=self.agent.state_dict(),
+                            optim_state=self.agent.optimizer.state_dict(),
+                            lr_sched_state=lr_scheduler.state_dict(),
+                            config=self.config,
+                            requeue_stats=requeue_stats,
+                        ),
+                        self.config,
+                    )
+
+                if EXIT.is_set():
+                    profiling_wrapper.range_pop()  # train update
+
+                    self.envs.close()
+
+                    requeue_job()
+
+                    return
 
                 for step in range(ppo_cfg.num_steps):
                     (
@@ -492,16 +570,13 @@ class PPOTrainerNO(BaseRLTrainerNonOracle):
                     if k not in {"reward", "count"}
                 }
 
-                if len(metrics) > 0:
-                    writer.add_scalar("metrics/distance_to_currgoal", metrics["distance_to_currgoal"], count_steps)
-                    writer.add_scalar("metrics/success", metrics["success"], count_steps)
-                    writer.add_scalar("metrics/sub_success", metrics["sub_success"], count_steps)
-                    writer.add_scalar("metrics/episode_length", metrics["episode_length"], count_steps)
-                    writer.add_scalar("metrics/distance_to_multi_goal", metrics["distance_to_multi_goal"], count_steps)
-                    writer.add_scalar("metrics/progress", metrics["progress"], count_steps)
-
+                for k, v in metrics.items():
+                    writer.add_scalar(f"metrics/{k}", v, count_steps)
+                    
+                
                 writer.add_scalar("train/losses_value", value_loss, count_steps)
                 writer.add_scalar("train/losses_policy", action_loss, count_steps)
+                writer.add_scalar("train/dist_entropy", dist_entropy, count_steps)
 
 
                 # log stats
@@ -533,7 +608,11 @@ class PPOTrainerNO(BaseRLTrainerNonOracle):
                 # checkpoint model
                 if update % self.config.CHECKPOINT_INTERVAL == 0:
                     self.save_checkpoint(
-                        f"ckpt.{count_checkpoints}.pth", dict(step=count_steps)
+                        f"ckpt.{count_checkpoints}.pth", 
+                        dict(
+                            step=count_steps,
+                            wall_time=(time.time() - t_start) + prev_time,
+                        )
                     )
                     count_checkpoints += 1
 
@@ -785,14 +864,9 @@ class PPOTrainerNO(BaseRLTrainerNonOracle):
         )
 
         metrics = {k: v for k, v in aggregated_stats.items() if k != "reward"}
-        writer.add_scalar("eval/distance_to_currgoal", metrics["distance_to_currgoal"], step_id)
-        writer.add_scalar("eval/distance_to_multi_goal", metrics["distance_to_multi_goal"], step_id)
-        writer.add_scalar("eval/episode_length", metrics["episode_length"], step_id)
-        writer.add_scalar("eval/mspl", metrics["mspl"], step_id)
-        writer.add_scalar("eval/pspl", metrics["pspl"], step_id)
-        writer.add_scalar("eval/progress", metrics["progress"], step_id)
-        writer.add_scalar("eval/success", metrics["success"], step_id)
-        writer.add_scalar("eval/sub_success", metrics["sub_success"], step_id)
+        
+        for k, v in metrics.items():
+            writer.add_scalar(f"eval/{k}", v, step_id)
 
         ##Dump metrics JSON
         if 'RAW_METRICS' in config.TASK_CONFIG.TASK.MEASUREMENTS:
