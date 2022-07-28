@@ -22,10 +22,8 @@ from habitat.datasets.pointnav.pointnav_dataset import PointNavDatasetV1
 
 def get_env_class(env_name: str) -> Type[habitat.RLEnv]:
     r"""Return environment class based on name.
-
     Args:
         env_name: name of the environment.
-
     Returns:
         Type[habitat.RLEnv]: env class.
     """
@@ -70,7 +68,6 @@ class MultiObjNavRLEnv(habitat.RLEnv):
         return observations
 
     def step(self, action: Union[int, str, Dict[str, Any]], **kwargs):
-        
         # Support simpler interface as well
         if isinstance(action, (str, int, np.integer)):
             self.task.is_found_called = bool(action == 0)
@@ -78,7 +75,7 @@ class MultiObjNavRLEnv(habitat.RLEnv):
         else:
             self.task.is_found_called = bool(action["action"] == 0)
         
-        observations = super().step(action, **kwargs)
+        observations = self._env.step(action, **kwargs)
         
         ##Terminates episode if wrong found is called
         if self.task.is_found_called == True and \
@@ -86,13 +83,21 @@ class MultiObjNavRLEnv(habitat.RLEnv):
             "sub_success" #"current_goal_success"
         ].get_metric() == 0:
             self.task._is_episode_active = False
+            self._env._episode_over = True
         
         ##Terminates episode if all goals are found
         if self.task.is_found_called == True and \
             self.task.current_goal_index == len(self.current_episode.goals):
             self.task._is_episode_active = False
-        
-        return observations
+            self._env._episode_over = True
+
+        reward = self.get_reward(observations, **kwargs)
+        done = self.get_done(observations)
+        info = self.get_info(observations)
+        #self._env._update_step_stats()       
+        return observations, reward, done, info
+
+    
 
     def get_reward_range(self):
         return (
@@ -137,5 +142,3 @@ class MultiObjNavRLEnv(habitat.RLEnv):
 
     def get_info(self, observations):
         return self.habitat_env.get_metrics()
-    
-
