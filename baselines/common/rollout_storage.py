@@ -254,6 +254,9 @@ class RolloutStorageNonOracle:
                 adv_targ,
             )
 
+    def advance_rollout(self, buffer_index: int = 0):
+        self.step += 1
+
     @staticmethod
     def _flatten_helper(t: int, n: int, tensor: torch.Tensor) -> torch.Tensor:
         r"""Given a tensor of size (t, n, ..), flatten it to size (t*n, ...).

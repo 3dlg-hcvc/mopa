@@ -46,7 +46,7 @@ RL:
     use_linear_lr_decay: True
     reward_window_size: 50
     use_normalized_advantage: False
-    hidden_size: 768
+    hidden_size: 512
   MAPS:
     egocentric_map_size: 13 # 3 x 3
     global_map_size: 275

@@ -23,7 +23,8 @@ from torch.optim.lr_scheduler import LambdaLR
 from gym import spaces
 
 from habitat import Config, logger, VectorEnv
-from habitat.utils.visualizations.utils import observations_to_image, append_text_to_image
+from habitat.utils.visualizations.utils import append_text_to_image
+from baselines.common.viz_utils import observations_to_image
 from baselines.common.base_trainer import (
     BaseRLTrainerNonOracle)
 from habitat_baselines.common.baseline_registry import baseline_registry
@@ -96,7 +97,7 @@ class PPOTrainerNO(BaseRLTrainerNonOracle):
         logger.add_filehandler(self.config.LOG_FILE)
 
         self.actor_critic = BaselinePolicyNonOracle(
-            batch_size=self.config.NUM_PROCESSES,
+            batch_size=self.config.NUM_ENVIRONMENTS,
             observation_space=self.envs.observation_spaces[0],
             action_space=self.envs.action_spaces[0],
             hidden_size=ppo_cfg.hidden_size,
@@ -647,6 +648,7 @@ class PPOTrainerNO(BaseRLTrainerNonOracle):
 
         config.defrost()
         config.TASK_CONFIG.DATASET.SPLIT = config.EVAL.SPLIT
+        config.TASK_CONFIG.ENVIRONMENT.ITERATOR_OPTIONS.SHUFFLE = False # shuffling turned off
         config.freeze()
 
         # if len(self.config.VIDEO_OPTION) > 0 and np.random.uniform(0, 1) <= self.config.VIDEO_PROB:
@@ -672,34 +674,34 @@ class PPOTrainerNO(BaseRLTrainerNonOracle):
 
         test_recurrent_hidden_states = torch.zeros(
             self.actor_critic.net.num_recurrent_layers,
-            self.config.NUM_PROCESSES,
+            self.config.NUM_ENVIRONMENTS,
             ppo_cfg.hidden_size,
             device=self.device,
         )
         test_global_map = torch.zeros(
-            self.config.NUM_PROCESSES,
+            self.config.NUM_ENVIRONMENTS,
             self.config.RL.MAPS.global_map_size,
             self.config.RL.MAPS.global_map_size,
             self.config.RL.MAPS.global_map_depth,
         )
         test_global_map_visualization = torch.zeros(
-            self.config.NUM_PROCESSES,
+            self.config.NUM_ENVIRONMENTS,
             self.config.RL.MAPS.global_map_size,
             self.config.RL.MAPS.global_map_size,
             3,
         )
         prev_actions = torch.zeros(
-            self.config.NUM_PROCESSES, 1, device=self.device, dtype=torch.long
+            self.config.NUM_ENVIRONMENTS, 1, device=self.device, dtype=torch.long
         )
         not_done_masks = torch.zeros(
-            self.config.NUM_PROCESSES, 1, device=self.device
+            self.config.NUM_ENVIRONMENTS, 1, device=self.device
         )
         stats_episodes = dict()  # dict of dicts that stores stats per episode
         raw_metrics_episodes = dict()
 
         all_actions = {}
         rgb_frames = [
-            [] for _ in range(self.config.NUM_PROCESSES)
+            [] for _ in range(self.config.NUM_ENVIRONMENTS)
         ]  # type: List[List[np.ndarray]]
         if len(self.config.VIDEO_OPTION) > 0:
             os.makedirs(self.config.VIDEO_DIR, exist_ok=True)
@@ -792,7 +794,7 @@ class PPOTrainerNO(BaseRLTrainerNonOracle):
                             video_option=self.config.VIDEO_OPTION,
                             video_dir=self.config.VIDEO_DIR,
                             images=rgb_frames[i],
-                            episode_id=current_episodes[i].episode_id,
+                            episode_id=os.path.basename(current_episodes[i].scene_id) + '_' + current_episodes[i].episode_id,
                             checkpoint_idx=checkpoint_index,
                             metrics=self._extract_scalars_from_info(infos[i]),
                             tb_writer=writer,
@@ -815,12 +817,18 @@ class PPOTrainerNO(BaseRLTrainerNonOracle):
                     projection1 = projection1.squeeze(0).permute(1, 2, 0)
 
                     s = map_config.egocentric_map_size
-                    #temp = torch.max(test_global_map_visualization[i][grid_x - math.floor(s/2):grid_x + math.ceil(s/2),grid_y - math.floor(s/2):grid_y + math.ceil(s/2),:], projection1)
-                    #test_global_map_visualization[i][grid_x - math.floor(s/2):grid_x + math.ceil(s/2),grid_y - math.floor(s/2):grid_y + math.ceil(s/2),:] = temp
-                    #global_map1 = rotate_tensor(test_global_map_visualization[i][grid_x - math.floor(51/2):grid_x + math.ceil(51/2),grid_y - math.floor(51/2):grid_y + math.ceil(51/2),:].permute(2, 1, 0).unsqueeze(0), torch.tensor(-(observations[i]["compass"])).unsqueeze(0)).squeeze(0).permute(1, 2, 0).numpy()
+                    temp = torch.max(test_global_map_visualization[i][grid_x - math.floor(s/2):grid_x + math.ceil(s/2),grid_y - math.floor(s/2):grid_y + math.ceil(s/2),:], projection1)
+                    test_global_map_visualization[i][grid_x - math.floor(s/2):grid_x + math.ceil(s/2),grid_y - math.floor(s/2):grid_y + math.ceil(s/2),:] = temp
+                    global_map1 = rotate_tensor(test_global_map_visualization[i][grid_x - math.floor(51/2):grid_x + math.ceil(51/2),grid_y - math.floor(51/2):grid_y + math.ceil(51/2),:].permute(2, 1, 0).unsqueeze(0), torch.tensor(-(observations[i]["compass"])).unsqueeze(0)).squeeze(0).permute(1, 2, 0).numpy()
                     egocentric_map = torch.sum(test_global_map[i, grid_x - math.floor(51/2):grid_x+math.ceil(51/2), grid_y - math.floor(51/2):grid_y + math.ceil(51/2),:], dim=2)
 
-                    frame = observations_to_image(observations[i], egocentric_map.data.cpu().numpy(), projection1.data.numpy(), None, infos[i], actions[i].cpu().numpy())
+                    frame = observations_to_image(observations[i], projection1.data.numpy(), egocentric_map.data.cpu().numpy(), global_map1, infos[i], actions[i].cpu().numpy())
+                    
+                    if self.config.VIDEO_RENDER_ALL_INFO:
+                        _m = self._extract_scalars_from_info(infos[i])
+                        _m["reward"] = current_episode_reward[i].item()
+                        frame = overlay_frame(frame, _m)
+                            
                     rgb_frames[i].append(frame)
 
             (
@@ -987,7 +995,7 @@ def rotate_tensor(x_gp, heading):
     A[:, 1, 0] = -sin_t
     A[:, 1, 1] = cos_t
 
-    grid = F.affine_grid(A, x_gp.size())
-    rotated_x_gp = F.grid_sample(x_gp, grid)
+    grid = F.affine_grid(A, x_gp.size(), align_corners=False)
+    rotated_x_gp = F.grid_sample(x_gp, grid, align_corners=False)
     return rotated_x_gp
 

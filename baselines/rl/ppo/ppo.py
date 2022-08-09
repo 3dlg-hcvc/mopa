@@ -157,6 +157,16 @@ class PPONonOracle(nn.Module):
         # print("\n Losses for update: value ",value_loss,"now action", action_loss, "now entropy", dist_entropy, "\n")
         return value_loss_epoch, action_loss_epoch, dist_entropy_epoch
 
+    def _evaluate_actions(
+        self, observations, rnn_hidden_states, global_map, prev_actions, masks, action
+    ):
+        r"""Internal method that calls Policy.evaluate_actions.  This is used instead of calling
+        that directly so that that call can be overrided with inheritance
+        """
+        return self.actor_critic.evaluate_actions(
+            observations, rnn_hidden_states, global_map, prev_actions, masks, action
+        )
+
     def before_backward(self, loss):
         pass
 
