@@ -50,6 +50,7 @@ TASK:
     'MSPL', 
     'PROGRESS', 
     'PSPL',
+    'RAW_METRICS',
     ]
 
   SUCCESS:

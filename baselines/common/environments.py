@@ -106,6 +106,13 @@ class MultiObjNavRLEnv(habitat.RLEnv):
         )
 
     def get_reward(self, observations, **kwargs):
+        if (self._episode_subsuccess()
+                and not self._episode_success()
+            ):
+            self._env.task.measurements.measures[self._reward_measure_name].update_metric(
+                episode=self.current_episode, task=self._env.task
+            )
+            
         reward = self._rl_config.SLACK_REWARD
 
         current_measure = self._env.get_metrics()[self._reward_measure_name]
