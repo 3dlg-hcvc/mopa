@@ -173,6 +173,10 @@ class MSPL(Measure):
                 self._start_end_episode_distance += self._sim.geodesic_distance(
                     episode.goals[goal_number - 1].position, episode.goals[goal_number].position
                 )
+        if self._start_end_episode_distance == float("inf"):
+            logger.info('(MSPL) Inf value from sim.geodesic_distance between successive goals starting from the start_position. episode=')
+            logger.info(episode)
+            
         self._agent_episode_distance = 0.0
         self._metric = None
         task.measurements.check_measure_dependencies(
