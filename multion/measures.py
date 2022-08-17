@@ -339,6 +339,14 @@ class DistanceToCurrGoal(Measure):
         )
 
         self._previous_position = current_position
+        
+        if (distance_to_subgoal==float("inf")):
+            # The simulator found no path from the current position to the goal.
+            # Assign a large number to distance_to_subgoal.
+            distance_to_subgoal = float(10000)
+            logger.info('Inf value from sim.geodesic_distance. Current Position, Goal=')
+            logger.info(str(current_position))
+            logger.info(str(episode.goals[task.current_goal_index].position))
 
         self._metric = distance_to_subgoal
 
