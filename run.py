@@ -83,8 +83,7 @@ def run_exp(exp_config: str, run_type: str, agent_type: str, opts=None) -> None:
         config.freeze()
 
         if agent_type in ["oracle", "oracle-ego", "no-map", "ora-obj-vis"]:
-            #trainer_init = baseline_registry.get_trainer("oracle")
-            trainer_init = baseline_registry.get_trainer("oracle-map")
+            trainer_init = baseline_registry.get_trainer("oracle")
             config.defrost()
             #config.RL.PPO.hidden_size = 512 if agent_type=="no-map" else 768 --- set this in the config
             config.TASK_CONFIG.SIMULATOR.DEPTH_SENSOR.MIN_DEPTH = 0.5

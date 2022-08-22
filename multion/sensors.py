@@ -2,6 +2,7 @@ import os
 from typing import Any, Optional
 
 import numpy as np
+from scipy import ndimage
 from gym import spaces
 from habitat.config import Config
 from habitat.core.registry import registry
@@ -13,8 +14,10 @@ from habitat.utils.geometry_utils import (
     quaternion_rotate_vector,
 )
 from habitat.tasks.utils import cartesian_to_polar
-
 from multion.task import MultiObjectGoalNavEpisode
+from habitat.utils.visualizations import maps, fog_of_war
+from multion import maps as multion_maps
+from PIL import Image   #debugging
 
 SLURM_JOBID = os.environ.get("SLURM_JOB_ID", None)
 SLURM_TMPDIR = os.environ.get("SLURM_TMPDIR", None)
@@ -174,7 +177,6 @@ class EpisodicCompassSensor(HeadingSensor):
             rotation_world_agent.inverse() * rotation_world_start
         )
 
-
 @registry.register_sensor(name="GPSSensor")
 class EpisodicGPSSensor(Sensor):
     r"""The agents current location in the coordinate frame defined by the episode,
@@ -229,3 +231,199 @@ class EpisodicGPSSensor(Sensor):
             )
         else:
             return agent_position.astype(np.float32)
+
+@registry.register_sensor(name="SemOccSensor")
+class SemOccSensor(Sensor):
+    r"""
+        Oracle Occupancy Map Sensor with Goals and Distractors marked
+    Args:
+        sim: reference to the simulator for calculating task observations.
+        config: sensor config
+    Attributes:
+        
+    """
+    cls_uuid: str = "semMap"
+    def __init__(
+        self, sim: Simulator, config: Config, *args: Any, **kwargs: Any
+    ):
+        self._sim = sim
+        
+        self.mapCache = {}
+        self.cache_max_size = config.cache_max_size
+        self.map_size = config.map_size
+        self.meters_per_pixel = config.meters_per_pixel
+        self.draw_border = config.draw_border   #false
+        self.with_sampling = config.with_sampling # true
+        self.channel_num_goals = config.channel_num_goals #1
+        self.objIndexOffset = config.objIndexOffset #1
+        if config.INCLUDE_DISTRACTORS:
+            if config.ORACLE_MAP_INCLUDE_DISTRACTORS_W_GOAL:
+                self.channel_num_distractors = 1
+            else:
+                self.channel_num_distractors = 2
+        else:
+            self.channel_num_distractors = 0
+        self.num_distractors_included = config.num_distractors_included
+        self.mask_map = config.mask_map # false for "oracle", true for "oracle-ego"
+        
+        #debugging
+        # self.count = 0
+
+        super().__init__(config=config)
+
+    def _get_uuid(self, *args: Any, **kwargs: Any):
+        return self.cls_uuid
+
+    def _get_sensor_type(self, *args: Any, **kwargs: Any):
+        return SensorTypes.SEMANTIC
+
+    def _get_observation_space(self, *args: Any, **kwargs: Any):
+        return spaces.Box(
+            low=0,
+            high=2,
+            shape=(self.map_size, self.map_size, 3),
+            dtype=np.int,
+        )
+
+    def get_observation(
+        self, *args: Any, observations, episode, **kwargs: Any
+    ):
+        agent_state = self._sim.get_agent_state()
+        agent_position = agent_state.position
+        agent_vertical_pos = str(round(agent_position[1],2))
+        
+        if (episode.scene_id in self.mapCache and 
+                agent_vertical_pos in self.mapCache[episode.scene_id]):
+            self.currMap = self.mapCache[episode.scene_id][agent_vertical_pos].copy()
+            
+        else:
+            top_down_map = multion_maps.get_topdown_map_from_sim(
+                self._sim,
+                draw_border=self.draw_border,
+                meters_per_pixel=self.meters_per_pixel,
+                with_sampling=self.with_sampling
+            )
+            range_x = np.where(np.any(top_down_map, axis=1))[0]
+            range_y = np.where(np.any(top_down_map, axis=0))[0]
+            padding = int(np.ceil(top_down_map.shape[0] / 400))
+            range_x = (
+                max(range_x[0] - padding, 0),
+                min(range_x[-1] + padding + 1, top_down_map.shape[0]),
+            )
+            range_y = (
+                max(range_y[0] - padding, 0),
+                min(range_y[-1] + padding + 1, top_down_map.shape[1]),
+            )
+            
+            # update topdown map to have 1 if occupied, 2 if unoccupied
+            top_down_map[range_x[0] : range_x[1], range_y[0] : range_y[1]] += 1
+
+            tmp_map = np.zeros((top_down_map.shape[0],top_down_map.shape[1],3))
+            tmp_map[:top_down_map.shape[0], :top_down_map.shape[1], 0] = top_down_map
+            self.currMap = tmp_map
+            
+            # Adding goal information on the map
+            for i in range(len(episode.goals)):
+                loc0 = episode.goals[i].position[0]
+                loc2 = episode.goals[i].position[2]
+                grid_loc = maps.to_grid(
+                    loc2,
+                    loc0,
+                    self.currMap.shape[0:2],
+                    sim=self._sim,
+                )
+                self.currMap[grid_loc[0]-1:grid_loc[0]+2, 
+                            grid_loc[1]-1:grid_loc[1]+2, 
+                            self.channel_num_goals] = (
+                                                            kwargs['task'].object_to_datset_mapping[episode.goals[i].object_category] 
+                                                            + self.objIndexOffset
+                                                        )
+                
+            if self.channel_num_distractors > 0:
+                # Adding distractor information on the map
+                self.num_distractors_included = (self.num_distractors_included 
+                                                if self.num_distractors_included > 0 
+                                                else len(episode.distractors))
+                for i in range(self.num_distractors_included):
+                    loc0 = episode.distractors[i].position[0]
+                    loc2 = episode.distractors[i].position[2]
+                    grid_loc = maps.to_grid(
+                        loc2,
+                        loc0,
+                        self.currMap.shape[0:2],
+                        sim=self._sim,
+                    )
+                    self.currMap[grid_loc[0]-1:grid_loc[0]+2, 
+                                grid_loc[1]-1:grid_loc[1]+2, 
+                                self.channel_num_distractors] = (
+                                                kwargs['task'].object_to_datset_mapping[episode.distractors[i].object_category] 
+                                                + self.distrIndexOffset
+                                            )
+                                
+            if episode.scene_id not in self.mapCache:
+                if len(self.mapCache) > self.cache_max_size:
+                    # Reset cache when cache size exceeds max size
+                    self.mapCache = {}
+                self.mapCache[episode.scene_id] = {}
+            self.mapCache[episode.scene_id][agent_vertical_pos] = self.currMap.copy()
+
+        currPix = maps.to_grid(
+                agent_position[2],
+                agent_position[0],
+                self.currMap.shape[0:2],
+                sim=self._sim,
+            )
+        
+        if self.mask_map:
+            self.expose = np.repeat(
+                self.task.measurements.measures["fow_map"].get_metric()[:, :, np.newaxis], 3, axis = 2
+            )
+            patch_tmp = self.currMap * self.expose
+        else:
+            patch_tmp = self.currMap
+            
+        patch = patch_tmp[max(currPix[0]-40,0):currPix[0]+40, max(currPix[1]-40,0):currPix[1]+40,:]
+        if patch.shape[0] < 80 or patch.shape[1] < 80:
+            if currPix[0] < 40:
+                curr_x = currPix[0]
+            else:
+                curr_x = 40
+            if currPix[1] < 40:
+                curr_y = currPix[1]
+            else:
+                curr_y = 40
+                
+            map_mid = (80//2)
+            tmp = np.zeros((80, 80,3))
+            tmp[map_mid-curr_x:map_mid-curr_x+patch.shape[0],
+                    map_mid-curr_y:map_mid-curr_y+patch.shape[1], :] = patch
+            patch = tmp
+            
+        if "heading" in observations:
+            agent_heading = observations["heading"]
+        else:
+            headingSensor = HeadingSensor(self._sim,self.config)
+            agent_heading = headingSensor.get_observation(observations, episode, kwargs)
+            
+        patch = ndimage.interpolation.rotate(patch, -(agent_heading[0] * 180/np.pi) + 90, 
+                                             axes=(0,1), order=0, reshape=False)
+        
+        sem_map = patch[40-25:40+25, 40-25:40+25, :]
+        
+        # debugging
+        """ Image.fromarray(
+            maps.colorize_topdown_map(
+                (sem_map[:,:,1]-1+multion_maps.MULTION_TOP_DOWN_MAP_START).astype(np.uint8)
+                )
+            ).save(
+            f"test_maps/{episode.episode_id}_sem_map_{self.count}.png")
+        Image.fromarray(
+            maps.colorize_topdown_map(
+                (self.currMap[:,:,1]-1+multion_maps.MULTION_TOP_DOWN_MAP_START).astype(np.uint8)
+                )
+            ).save(
+            f"test_maps/{episode.episode_id}_{self.count}.png")
+        self.count+=1 """
+        # debugging - end
+        
+        return sem_map

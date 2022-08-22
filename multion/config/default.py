@@ -162,6 +162,26 @@ _C.TASK.SEMANTIC_OBJECTS_VISIBLE_SENSOR = CN()
 _C.TASK.SEMANTIC_OBJECTS_VISIBLE_SENSOR.TYPE = "SemanticObjectVisibleSensor"
 _C.TASK.SEMANTIC_OBJECTS_VISIBLE_SENSOR.TOTAL_NUM_OBJECTS = 9
 # -----------------------------------------------------------------------------
+# SEMANTIC OCCUPANCY SENSOR
+# -----------------------------------------------------------------------------
+_C.TASK.SEM_OCC_SENSOR = CN()
+_C.TASK.SEM_OCC_SENSOR.TYPE = "SemOccSensor"
+_C.TASK.SEM_OCC_SENSOR.meters_per_pixel = 0.3
+_C.TASK.SEM_OCC_SENSOR.draw_border = False
+_C.TASK.SEM_OCC_SENSOR.with_sampling = True
+_C.TASK.SEM_OCC_SENSOR.mask_map = False
+_C.TASK.SEM_OCC_SENSOR.cache_max_size = 2
+_C.TASK.SEM_OCC_SENSOR.map_size = 50
+
+# Goals
+_C.TASK.SEM_OCC_SENSOR.channel_num_goals = 1
+_C.TASK.SEM_OCC_SENSOR.objIndexOffset = 1
+
+# Distractors
+_C.TASK.SEM_OCC_SENSOR.INCLUDE_DISTRACTORS = False
+_C.TASK.SEM_OCC_SENSOR.ORACLE_MAP_INCLUDE_DISTRACTORS_W_GOAL = False
+_C.TASK.SEM_OCC_SENSOR.num_distractors_included = -1
+# -----------------------------------------------------------------------------
 # SUCCESS MEASUREMENT
 # -----------------------------------------------------------------------------
 _C.TASK.SUCCESS = CN()
