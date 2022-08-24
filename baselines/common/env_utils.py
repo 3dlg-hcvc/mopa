@@ -53,6 +53,7 @@ def construct_envs(
     """
 
     num_environments = config.NUM_ENVIRONMENTS
+    num_scenes = config.NUM_SCENES
     configs = []
     env_classes = [env_class for _ in range(num_environments)]
     dataset = make_dataset(config.TASK_CONFIG.DATASET.TYPE)
@@ -69,6 +70,10 @@ def construct_envs(
         )
 
     random.shuffle(scenes)
+    
+    # Fetch only specified number of scenes
+    if num_scenes > 0 and num_scenes < len(scenes):
+        scenes = scenes[:num_scenes]
 
     scene_splits: List[List[str]] = [[] for _ in range(num_environments)]
     if len(scenes) < num_environments:

@@ -16,6 +16,7 @@ CHECKPOINT_FOLDER: "experiments/learned/proj-neural/mon2.0/checkpoints"
 NUM_UPDATES: 300000
 LOG_INTERVAL: 1
 CHECKPOINT_INTERVAL: 500
+NUM_SCENES: 50  # Specify the number of scenes to pick (mainly in training)
 
 # EVAL:
 #   SPLIT: test
