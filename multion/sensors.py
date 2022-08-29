@@ -252,6 +252,9 @@ class SemOccSensor(Sensor):
         self.cache_max_size = config.cache_max_size
         self.map_size = config.map_size
         self.meters_per_pixel = config.meters_per_pixel
+        self.num_samples = config.num_samples
+        self.nav_threshold = config.nav_threshold
+        self.map_channels = config.MAP_CHANNELS
         self.draw_border = config.draw_border   #false
         self.with_sampling = config.with_sampling # true
         self.channel_num_goals = config.channel_num_goals #1
@@ -301,24 +304,13 @@ class SemOccSensor(Sensor):
                 self._sim,
                 draw_border=self.draw_border,
                 meters_per_pixel=self.meters_per_pixel,
-                with_sampling=self.with_sampling
+                with_sampling=self.with_sampling,
+                num_samples=self.num_samples,
+                nav_threshold=self.nav_threshold
             )
-            range_x = np.where(np.any(top_down_map, axis=1))[0]
-            range_y = np.where(np.any(top_down_map, axis=0))[0]
-            padding = int(np.ceil(top_down_map.shape[0] / 400))
-            range_x = (
-                max(range_x[0] - padding, 0),
-                min(range_x[-1] + padding + 1, top_down_map.shape[0]),
-            )
-            range_y = (
-                max(range_y[0] - padding, 0),
-                min(range_y[-1] + padding + 1, top_down_map.shape[1]),
-            )
-            
-            # update topdown map to have 1 if occupied, 2 if unoccupied
-            top_down_map[range_x[0] : range_x[1], range_y[0] : range_y[1]] += 1
+            top_down_map += 1 # update topdown map to have 1 if occupied, 2 if unoccupied/navigable
 
-            tmp_map = np.zeros((top_down_map.shape[0],top_down_map.shape[1],3))
+            tmp_map = np.zeros((top_down_map.shape[0],top_down_map.shape[1],self.map_channels))
             tmp_map[:top_down_map.shape[0], :top_down_map.shape[1], 0] = top_down_map
             self.currMap = tmp_map
             
@@ -394,7 +386,7 @@ class SemOccSensor(Sensor):
                 curr_y = 40
                 
             map_mid = (80//2)
-            tmp = np.zeros((80, 80,3))
+            tmp = np.zeros((80, 80,self.map_channels))
             tmp[map_mid-curr_x:map_mid-curr_x+patch.shape[0],
                     map_mid-curr_y:map_mid-curr_y+patch.shape[1], :] = patch
             patch = tmp

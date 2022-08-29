@@ -4,15 +4,10 @@
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
 
-import os
-from typing import Any, Dict, List, Optional, Sequence, Tuple
+from typing import Optional
 
-import imageio
 import numpy as np
-import scipy.ndimage
-
-from habitat.core.utils import try_cv2_import
-from habitat.utils.visualizations import utils, maps
+from habitat.utils.visualizations import maps
 
 try:
     from habitat.sims.habitat_simulator.habitat_simulator import HabitatSim

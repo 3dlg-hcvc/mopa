@@ -670,15 +670,17 @@ class TopDownMap(Measure):
                     )
                 except AttributeError:
                     pass
-        for distractor in episode.distractors:
-            if self._is_on_same_floor(distractor.position[1]):
-                try:
-                    color_ind = multion_maps.MULTION_CYL_OBJECT_CATEGORY[distractor.object_category]
-                    self._draw_point(
-                        distractor.position, (multion_maps.MULTION_TOP_DOWN_MAP_START + color_ind)
-                    )
-                except AttributeError:
-                    pass
+                
+        if self._config.DRAW_DISTRACTORS:
+            for distractor in episode.distractors:
+                if self._is_on_same_floor(distractor.position[1]):
+                    try:
+                        color_ind = multion_maps.MULTION_CYL_OBJECT_CATEGORY[distractor.object_category]
+                        self._draw_point(
+                            distractor.position, (multion_maps.MULTION_TOP_DOWN_MAP_START + color_ind)
+                        )
+                    except AttributeError:
+                        pass
 
     def _draw_goals_aabb(self, episode):
         if self._config.DRAW_GOAL_AABBS:

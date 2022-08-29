@@ -20,6 +20,7 @@ import torch_scatter
 from habitat.core.logging import logger
 from habitat.core.utils import try_cv2_import
 from habitat.utils.visualizations import maps
+from multion import maps as multion_maps
 
 cv2 = try_cv2_import()
 
@@ -221,7 +222,7 @@ def observations_to_image(observation: Dict, projected_features: np.ndarray=None
         depth_map = depth_map.astype(np.uint8)
         depth_map = np.stack([depth_map for _ in range(3)], axis=2)
         egocentric_view.append(depth_map)
-
+    
     if projected_features is not None and len(projected_features)>0:
         projected_features = cv2.resize(
             projected_features,
@@ -262,6 +263,48 @@ def observations_to_image(observation: Dict, projected_features: np.ndarray=None
 
     frame = egocentric_view
 
+    if "semMap" in observation:
+        # Add occupancy map
+        occ_map = observation["semMap"][:,:,0].squeeze()
+        occ_map_size = occ_map.shape[0]
+        if not isinstance(occ_map, np.ndarray):
+            occ_map = occ_map.cpu().numpy()
+        occ_map = occ_map.astype(np.uint8)
+        occ_map[occ_map_size//2, occ_map_size//2] = 8
+        occ_map = maps.colorize_topdown_map(occ_map)
+        
+        # scale map to align with rgb view
+        old_h, old_w, _ = occ_map.shape
+        top_down_height = observation_size
+        top_down_width = int(float(top_down_height) / old_h * old_w)
+        # cv2 resize (dsize is width first)
+        occ_map = cv2.resize(
+            occ_map,
+            (top_down_width, top_down_height),
+            interpolation=cv2.INTER_CUBIC,
+        )
+        frame = np.concatenate((frame, occ_map), axis=1)
+        
+        # Add goals/distractors map
+        goal_map = observation["semMap"][:,:,1].squeeze()
+        if not isinstance(goal_map, np.ndarray):
+            goal_map = goal_map.cpu().numpy()
+        goal_map = goal_map.astype(np.uint8)
+        goal_map[occ_map_size//2, occ_map_size//2] = 8
+        goal_map = maps.colorize_topdown_map(goal_map-1+multion_maps.MULTION_TOP_DOWN_MAP_START)
+        
+        # scale map to align with rgb view
+        old_h, old_w, _ = goal_map.shape
+        top_down_height = observation_size
+        top_down_width = int(float(top_down_height) / old_h * old_w)
+        # cv2 resize (dsize is width first)
+        goal_map = cv2.resize(
+            goal_map,
+            (top_down_width, top_down_height),
+            interpolation=cv2.INTER_CUBIC,
+        )
+        frame = np.concatenate((frame, goal_map), axis=1)
+
     if "top_down_map" in info:
         top_down_map = info["top_down_map"]["map"]
         top_down_map = maps.colorize_topdown_map(
@@ -288,7 +331,7 @@ def observations_to_image(observation: Dict, projected_features: np.ndarray=None
             (top_down_width, top_down_height),
             interpolation=cv2.INTER_CUBIC,
         )
-        frame = np.concatenate((egocentric_view, top_down_map), axis=1)
+        frame = np.concatenate((frame, top_down_map), axis=1)
     return frame
 
 

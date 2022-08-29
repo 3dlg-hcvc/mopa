@@ -166,7 +166,12 @@ _C.TASK.SEMANTIC_OBJECTS_VISIBLE_SENSOR.TOTAL_NUM_OBJECTS = 9
 # -----------------------------------------------------------------------------
 _C.TASK.SEM_OCC_SENSOR = CN()
 _C.TASK.SEM_OCC_SENSOR.TYPE = "SemOccSensor"
+_C.TASK.SEM_OCC_SENSOR.pregenerated = False
+_C.TASK.SEM_OCC_SENSOR.pregenerated_file_path = "data/oracle_maps/map300.pickle"
 _C.TASK.SEM_OCC_SENSOR.meters_per_pixel = 0.3
+_C.TASK.SEM_OCC_SENSOR.num_samples = 50
+_C.TASK.SEM_OCC_SENSOR.nav_threshold = 0.3
+_C.TASK.SEM_OCC_SENSOR.MAP_CHANNELS = 3
 _C.TASK.SEM_OCC_SENSOR.draw_border = False
 _C.TASK.SEM_OCC_SENSOR.with_sampling = True
 _C.TASK.SEM_OCC_SENSOR.mask_map = False
@@ -224,6 +229,7 @@ _C.TASK.TOP_DOWN_MAP.DRAW_VIEW_POINTS = True
 _C.TASK.TOP_DOWN_MAP.DRAW_GOAL_POSITIONS = True
 # Axes aligned bounding boxes
 _C.TASK.TOP_DOWN_MAP.DRAW_GOAL_AABBS = True
+_C.TASK.TOP_DOWN_MAP.DRAW_DISTRACTORS = False
 # -----------------------------------------------------------------------------
 # COLLISIONS MEASUREMENT
 # -----------------------------------------------------------------------------
