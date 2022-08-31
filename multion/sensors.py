@@ -1,6 +1,7 @@
 import os
 from typing import Any, Optional
 
+import pickle
 import numpy as np
 from scipy import ndimage
 from gym import spaces
@@ -268,6 +269,10 @@ class SemOccSensor(Sensor):
             self.channel_num_distractors = 0
         self.num_distractors_included = config.num_distractors_included
         self.mask_map = config.mask_map # false for "oracle", true for "oracle-ego"
+        self.pregenerated = config.pregenerated
+        if self.pregenerated:
+            with open(config.pregenerated_file_path, 'rb') as handle:
+                self.mapCache = pickle.load(handle)
         
         #debugging
         # self.count = 0
@@ -287,6 +292,26 @@ class SemOccSensor(Sensor):
             shape=(self.map_size, self.map_size, 3),
             dtype=np.int,
         )
+    def conv_grid(
+        self,
+        realworld_x,
+        realworld_y,
+        coordinate_min = -120.3241-1e-6,
+        coordinate_max = 120.0399+1e-6,
+        grid_resolution = (300, 300)
+    ):
+        r"""Return gridworld index of realworld coordinates assuming top-left corner
+        is the origin. The real world coordinates of lower left corner are
+        (coordinate_min, coordinate_min) and of top right corner are
+        (coordinate_max, coordinate_max)
+        """
+        grid_size = (
+            (coordinate_max - coordinate_min) / grid_resolution[0],
+            (coordinate_max - coordinate_min) / grid_resolution[1],
+        )
+        grid_x = int((coordinate_max - realworld_x) / grid_size[0])
+        grid_y = int((realworld_y - coordinate_min) / grid_size[1])
+        return grid_x, grid_y
 
     def get_observation(
         self, *args: Any, observations, episode, **kwargs: Any
@@ -295,35 +320,14 @@ class SemOccSensor(Sensor):
         agent_position = agent_state.position
         agent_vertical_pos = str(round(agent_position[1],2))
         
-        if (episode.scene_id in self.mapCache and 
-                agent_vertical_pos in self.mapCache[episode.scene_id]):
-            self.currMap = self.mapCache[episode.scene_id][agent_vertical_pos].copy()
-            
-        else:
-            top_down_map = multion_maps.get_topdown_map_from_sim(
-                self._sim,
-                draw_border=self.draw_border,
-                meters_per_pixel=self.meters_per_pixel,
-                with_sampling=self.with_sampling,
-                num_samples=self.num_samples,
-                nav_threshold=self.nav_threshold
-            )
-            top_down_map += 1 # update topdown map to have 1 if occupied, 2 if unoccupied/navigable
-
-            tmp_map = np.zeros((top_down_map.shape[0],top_down_map.shape[1],self.map_channels))
-            tmp_map[:top_down_map.shape[0], :top_down_map.shape[1], 0] = top_down_map
-            self.currMap = tmp_map
+        if self.pregenerated:
+            self.currMap = np.copy(self.mapCache[episode.scene_id])
             
             # Adding goal information on the map
             for i in range(len(episode.goals)):
                 loc0 = episode.goals[i].position[0]
                 loc2 = episode.goals[i].position[2]
-                grid_loc = maps.to_grid(
-                    loc2,
-                    loc0,
-                    self.currMap.shape[0:2],
-                    sim=self._sim,
-                )
+                grid_loc = self.conv_grid(loc0, loc2)
                 self.currMap[grid_loc[0]-1:grid_loc[0]+2, 
                             grid_loc[1]-1:grid_loc[1]+2, 
                             self.channel_num_goals] = (
@@ -339,6 +343,41 @@ class SemOccSensor(Sensor):
                 for i in range(self.num_distractors_included):
                     loc0 = episode.distractors[i].position[0]
                     loc2 = episode.distractors[i].position[2]
+                    grid_loc = self.conv_grid(loc0, loc2)
+                    self.currMap[grid_loc[0]-1:grid_loc[0]+2, 
+                                grid_loc[1]-1:grid_loc[1]+2, 
+                                self.channel_num_distractors] = (
+                                                kwargs['task'].object_to_datset_mapping[episode.distractors[i].object_category] 
+                                                + self.distrIndexOffset
+                                            )
+            currPix = self.conv_grid(
+                agent_position[2],
+                agent_position[0]
+            )
+        else:
+            if (episode.scene_id in self.mapCache and 
+                    agent_vertical_pos in self.mapCache[episode.scene_id]):
+                self.currMap = self.mapCache[episode.scene_id][agent_vertical_pos].copy()
+                
+            else:
+                top_down_map = multion_maps.get_topdown_map_from_sim(
+                    self._sim,
+                    draw_border=self.draw_border,
+                    meters_per_pixel=self.meters_per_pixel,
+                    with_sampling=self.with_sampling,
+                    num_samples=self.num_samples,
+                    nav_threshold=self.nav_threshold
+                )
+                top_down_map += 1 # update topdown map to have 1 if occupied, 2 if unoccupied/navigable
+
+                tmp_map = np.zeros((top_down_map.shape[0],top_down_map.shape[1],self.map_channels))
+                tmp_map[:top_down_map.shape[0], :top_down_map.shape[1], 0] = top_down_map
+                self.currMap = tmp_map
+                
+                # Adding goal information on the map
+                for i in range(len(episode.goals)):
+                    loc0 = episode.goals[i].position[0]
+                    loc2 = episode.goals[i].position[2]
                     grid_loc = maps.to_grid(
                         loc2,
                         loc0,
@@ -347,24 +386,45 @@ class SemOccSensor(Sensor):
                     )
                     self.currMap[grid_loc[0]-1:grid_loc[0]+2, 
                                 grid_loc[1]-1:grid_loc[1]+2, 
-                                self.channel_num_distractors] = (
-                                                kwargs['task'].object_to_datset_mapping[episode.distractors[i].object_category] 
-                                                + self.distrIndexOffset
-                                            )
-                                
-            if episode.scene_id not in self.mapCache:
-                if len(self.mapCache) > self.cache_max_size:
-                    # Reset cache when cache size exceeds max size
-                    self.mapCache = {}
-                self.mapCache[episode.scene_id] = {}
-            self.mapCache[episode.scene_id][agent_vertical_pos] = self.currMap.copy()
+                                self.channel_num_goals] = (
+                                                                kwargs['task'].object_to_datset_mapping[episode.goals[i].object_category] 
+                                                                + self.objIndexOffset
+                                                            )
+                    
+                if self.channel_num_distractors > 0:
+                    # Adding distractor information on the map
+                    self.num_distractors_included = (self.num_distractors_included 
+                                                    if self.num_distractors_included > 0 
+                                                    else len(episode.distractors))
+                    for i in range(self.num_distractors_included):
+                        loc0 = episode.distractors[i].position[0]
+                        loc2 = episode.distractors[i].position[2]
+                        grid_loc = maps.to_grid(
+                            loc2,
+                            loc0,
+                            self.currMap.shape[0:2],
+                            sim=self._sim,
+                        )
+                        self.currMap[grid_loc[0]-1:grid_loc[0]+2, 
+                                    grid_loc[1]-1:grid_loc[1]+2, 
+                                    self.channel_num_distractors] = (
+                                                    kwargs['task'].object_to_datset_mapping[episode.distractors[i].object_category] 
+                                                    + self.distrIndexOffset
+                                                )
+                                    
+                if episode.scene_id not in self.mapCache:
+                    if len(self.mapCache) > self.cache_max_size:
+                        # Reset cache when cache size exceeds max size
+                        self.mapCache = {}
+                    self.mapCache[episode.scene_id] = {}
+                self.mapCache[episode.scene_id][agent_vertical_pos] = self.currMap.copy()
 
-        currPix = maps.to_grid(
-                agent_position[2],
-                agent_position[0],
-                self.currMap.shape[0:2],
-                sim=self._sim,
-            )
+            currPix = maps.to_grid(
+                    agent_position[2],
+                    agent_position[0],
+                    self.currMap.shape[0:2],
+                    sim=self._sim,
+                )
         
         if self.mask_map:
             self.expose = np.repeat(
