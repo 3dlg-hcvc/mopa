@@ -101,7 +101,8 @@ class PPOTrainerNO(BaseRLTrainerNonOracle):
             global_map_size=self.config.RL.MAPS.global_map_size,
             global_map_depth=self.config.RL.MAPS.global_map_depth,
             coordinate_min=self.config.RL.MAPS.coordinate_min,
-            coordinate_max=self.config.RL.MAPS.coordinate_max
+            coordinate_max=self.config.RL.MAPS.coordinate_max,
+            map_config=self.config.RL.MAPS,
         )
         self.actor_critic.to(self.device)
 
@@ -233,6 +234,10 @@ class PPOTrainerNO(BaseRLTrainerNonOracle):
 
         t_step_env = time.time()
 
+        _curr_scenes = [f'{os.path.basename(e.scene_id)}' for e in self.envs.current_episodes()]
+        _curr_episodes = [f'{os.path.basename(e.scene_id)}__{e.episode_id}' for e in self.envs.current_episodes()]
+        self.train_episodes.update(_curr_episodes)
+        self.train_scenes.update(_curr_scenes)
         outputs = self.envs.step([a[0].item() for a in actions])
         observations, rewards, dones, infos = [list(x) for x in zip(*outputs)]
 
@@ -349,6 +354,7 @@ class PPOTrainerNO(BaseRLTrainerNonOracle):
             ppo_cfg.hidden_size,
             self.config.RL.MAPS.global_map_size,
             self.config.RL.MAPS.global_map_depth,
+            self.config.RL.MAPS
         )
         rollouts.to(self.device)
 
@@ -373,6 +379,8 @@ class PPOTrainerNO(BaseRLTrainerNonOracle):
             lambda: deque(maxlen=ppo_cfg.reward_window_size)
         )
 
+        self.train_scenes = set()
+        self.train_episodes = set()
         t_start = time.time()
         env_time = 0
         pth_time = 0
@@ -412,6 +420,8 @@ class PPOTrainerNO(BaseRLTrainerNonOracle):
             self.config.TENSORBOARD_DIR, flush_secs=self.flush_secs
         ) as writer:
             for update in range(self.num_updates_done, self.config.NUM_UPDATES):
+                logger.info(f'Scenes Loaded: {",".join(self.train_scenes)}')
+                logger.info(f'Episodes Loaded: {",".join(self.train_episodes)}')
                 self.num_updates_done = update
                 if ppo_cfg.use_linear_lr_decay:
                     lr_scheduler.step()
@@ -565,6 +575,8 @@ class PPOTrainerNO(BaseRLTrainerNonOracle):
                 for k, v in metrics.items():
                     writer.add_scalar(f"metrics/{k}", v, count_steps)
                     
+                writer.add_scalar(f"metrics/total_scenes_loaded", len(self.train_scenes), count_steps)
+                writer.add_scalar(f"metrics/total_episodes_loaded", len(self.train_episodes), count_steps)
                 
                 writer.add_scalar("train/losses_value", value_loss, count_steps)
                 writer.add_scalar("train/losses_policy", action_loss, count_steps)
@@ -639,7 +651,7 @@ class PPOTrainerNO(BaseRLTrainerNonOracle):
 
         config.defrost()
         config.TASK_CONFIG.DATASET.SPLIT = config.EVAL.SPLIT
-        config.TASK_CONFIG.ENVIRONMENT.ITERATOR_OPTIONS.SHUFFLE = False # shuffling turned off
+        #config.TASK_CONFIG.ENVIRONMENT.ITERATOR_OPTIONS.SHUFFLE = False # shuffling turned off
         config.freeze()
 
         # if len(self.config.VIDEO_OPTION) > 0 and np.random.uniform(0, 1) <= self.config.VIDEO_PROB:
@@ -1419,7 +1431,7 @@ class PPOTrainerO(BaseRLTrainerOracle):
 
         config.defrost()
         config.TASK_CONFIG.DATASET.SPLIT = config.EVAL.SPLIT
-        config.TASK_CONFIG.ENVIRONMENT.ITERATOR_OPTIONS.SHUFFLE = False # shuffling turned off
+        #config.TASK_CONFIG.ENVIRONMENT.ITERATOR_OPTIONS.SHUFFLE = False # shuffling turned off
         config.freeze()
 
         if len(self.config.VIDEO_OPTION) > 0:

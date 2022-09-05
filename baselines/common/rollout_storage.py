@@ -26,6 +26,7 @@ class RolloutStorageNonOracle:
         recurrent_hidden_state_size,
         global_map_size,
         global_map_depth,
+        map_config,
         num_recurrent_layers=1,
     ):
         self.observations = {}
@@ -47,8 +48,8 @@ class RolloutStorageNonOracle:
         self.global_map = torch.zeros(
             num_steps + 1,
             num_envs,
-            51,
-            51,
+            map_config.local_map_size,
+            map_config.local_map_size,
             global_map_depth,
         )
 

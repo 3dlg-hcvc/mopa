@@ -171,6 +171,7 @@ class BaselinePolicyNonOracle(PolicyNonOracle):
         global_map_depth,
         coordinate_min,
         coordinate_max,
+        map_config,
         hidden_size=512,
     ):
         super().__init__(
@@ -188,6 +189,7 @@ class BaselinePolicyNonOracle(PolicyNonOracle):
                 global_map_depth=global_map_depth,
                 coordinate_min=coordinate_min,
                 coordinate_max=coordinate_max,
+                map_config=map_config,
             ),
             action_space.n,
         )
@@ -199,7 +201,7 @@ class BaselineNetNonOracle(Net):
 
     def __init__(self, batch_size, observation_space, hidden_size, goal_sensor_uuid, device, 
         object_category_embedding_size, previous_action_embedding_size, use_previous_action,
-        egocentric_map_size, global_map_size, global_map_depth, coordinate_min, coordinate_max
+        egocentric_map_size, global_map_size, global_map_depth, coordinate_min, coordinate_max, map_config
     ):
         super().__init__()
         self.goal_sensor_uuid = goal_sensor_uuid
@@ -209,12 +211,14 @@ class BaselineNetNonOracle(Net):
         self._hidden_size = hidden_size
         self.device = device
         self.use_previous_action = use_previous_action
+        self.map_config = map_config
         self.egocentric_map_size = egocentric_map_size
         self.global_map_size = global_map_size
         self.global_map_depth = global_map_depth
+        self.local_map_size = map_config.local_map_size
 
         self.visual_encoder = RGBCNNNonOracle(observation_space, hidden_size)
-        self.map_encoder = MapCNN(51, 256, "non-oracle")        
+        self.map_encoder = MapCNN(self.local_map_size, 256, "non-oracle")        
 
         self.projection = Projection(egocentric_map_size, global_map_size, 
             device, coordinate_min, coordinate_max
@@ -311,8 +315,8 @@ class BaselineNetNonOracle(Net):
             _, trans_mat_retrieval = get_grid(st_pose_retrieval, agent_view.size(), self.device)
             translated_retrieval = F.grid_sample(self.full_global_map[:bs, :, :, :].permute(0, 3, 1, 2), trans_mat_retrieval)
             translated_retrieval = translated_retrieval[:,:,
-                self.global_map_size//2-math.floor(51/2):self.global_map_size//2+math.ceil(51/2), 
-                self.global_map_size//2-math.floor(51/2):self.global_map_size//2+math.ceil(51/2)
+                self.global_map_size//2-math.floor(self.local_map_size/2):self.global_map_size//2+math.ceil(self.local_map_size/2), 
+                self.global_map_size//2-math.floor(self.local_map_size/2):self.global_map_size//2+math.ceil(self.local_map_size/2)
             ]
             final_retrieval = self.rotate_tensor.forward(translated_retrieval, observations["compass"])
 
@@ -327,10 +331,10 @@ class BaselineNetNonOracle(Net):
         else: 
             global_map = global_map * masks.unsqueeze(1).unsqueeze(1)  ##verify
             with torch.cuda.device(self.device):
-                agent_view = torch.cuda.FloatTensor(bs, self.global_map_depth, 51, 51).fill_(0)
+                agent_view = torch.cuda.FloatTensor(bs, self.global_map_depth, self.local_map_size, self.local_map_size).fill_(0)
             agent_view[:, :, 
-                51//2 - math.floor(self.egocentric_map_size/2):51//2 + math.ceil(self.egocentric_map_size/2), 
-                51//2 - math.floor(self.egocentric_map_size/2):51//2 + math.ceil(self.egocentric_map_size/2)
+                self.local_map_size//2 - math.floor(self.egocentric_map_size/2):self.local_map_size//2 + math.ceil(self.egocentric_map_size/2), 
+                self.local_map_size//2 - math.floor(self.egocentric_map_size/2):self.local_map_size//2 + math.ceil(self.egocentric_map_size/2)
             ] = projection
             
             final_retrieval = torch.max(global_map, agent_view.permute(0, 2, 3, 1))
