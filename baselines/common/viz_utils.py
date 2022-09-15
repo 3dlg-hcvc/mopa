@@ -190,7 +190,9 @@ def draw_found(view: np.ndarray, alpha: float = 1) -> np.ndarray:
     view[mask] = (alpha * np.array([0, 0, 255]) + (1.0 - alpha) * view)[mask]
     return view
 
-def observations_to_image(observation: Dict, projected_features: np.ndarray=None, egocentric_projection: np.ndarray=None, global_map: np.ndarray=None, info: Dict=None, action: np.ndarray=None) -> np.ndarray:
+def observations_to_image(observation: Dict, projected_features: np.ndarray=None, 
+        egocentric_projection: np.ndarray=None, global_map: np.ndarray=None, 
+        info: Dict=None, action: np.ndarray=None) -> np.ndarray:
 # def observations_to_image(observation: Dict, info: Dict, action: np.ndarray) -> np.ndarray:
     r"""Generate image of single frame from observation and info
     returned from a single environment step().
@@ -229,16 +231,22 @@ def observations_to_image(observation: Dict, projected_features: np.ndarray=None
             depth_map.shape[:2],
             interpolation=cv2.INTER_CUBIC,
         )
-        projected_features /= np.max(projected_features)
-        projected_features  = cv2.applyColorMap(np.uint8(255 * projected_features), cv2.COLORMAP_JET)
+        # projected_features /= np.max(projected_features)
+        # projected_features  = cv2.applyColorMap(np.uint8(255 * projected_features), cv2.COLORMAP_JET)
         egocentric_view.append(projected_features)
 
     if egocentric_projection is not None and len(egocentric_projection)>0:
+        if not isinstance(egocentric_projection, np.ndarray):
+            egocentric_projection = egocentric_projection.cpu().numpy()
+
+        egocentric_projection = (egocentric_projection * 255).astype(np.uint8)
+        egocentric_projection = np.stack([egocentric_projection for _ in range(3)], axis=2)
         egocentric_projection = cv2.resize(
             egocentric_projection,
             depth_map.shape[:2],
             interpolation=cv2.INTER_CUBIC,
         )
+
         egocentric_view.append(egocentric_projection)
 
     if global_map is not None and len(global_map)>0:
@@ -255,10 +263,10 @@ def observations_to_image(observation: Dict, projected_features: np.ndarray=None
     egocentric_view = np.concatenate(egocentric_view, axis=1)
 
     # draw collision
-    if "collisions" in info and info["collisions"]["is_collision"]:
+    if info is not None and "collisions" in info and info["collisions"] is not None and info["collisions"]["is_collision"]:
         egocentric_view = draw_collision(egocentric_view)
 
-    if action[0] == 0:
+    if action is not None and action[0] == 0:
         egocentric_view = draw_found(egocentric_view)
 
     frame = egocentric_view
@@ -305,7 +313,7 @@ def observations_to_image(observation: Dict, projected_features: np.ndarray=None
         )
         frame = np.concatenate((frame, goal_map), axis=1)
 
-    if "top_down_map" in info:
+    if info is not None and "top_down_map" in info and info["top_down_map"] is not None:
         top_down_map = info["top_down_map"]["map"]
         top_down_map = maps.colorize_topdown_map(
             top_down_map, info["top_down_map"]["fog_of_war_mask"]

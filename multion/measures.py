@@ -786,6 +786,17 @@ class TopDownMap(Measure):
             self._draw_point(
                 episode.start_position, maps.MAP_SOURCE_POINT_INDICATOR
             )
+            
+        # Initialize map
+        house_map, map_agent_x, map_agent_y = self.update_map(
+            self._sim.get_agent_state().position
+        )
+        self._metric = {
+            "map": house_map,
+            "fog_of_war_mask": self._fog_of_war_mask,
+            "agent_map_coord": (map_agent_x, map_agent_y),
+            "agent_angle": self.get_polar_angle(),
+        }
 
     def update_metric(self, episode, action, *args: Any, **kwargs: Any):
         self._step_count += 1

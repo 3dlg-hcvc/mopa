@@ -149,3 +149,6 @@ class MultiObjNavRLEnv(habitat.RLEnv):
 
     def get_info(self, observations):
         return self.habitat_env.get_metrics()
+    
+    def get_metrics(self):
+        return self._env.get_metrics()

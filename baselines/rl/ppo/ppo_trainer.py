@@ -154,7 +154,7 @@ class PPOTrainerNO(BaseRLTrainerNonOracle):
         """
         return torch.load(checkpoint_path, *args, **kwargs)
 
-    METRICS_BLACKLIST = {"top_down_map", "collisions.is_collision", "raw_metrics"}
+    METRICS_BLACKLIST = {"top_down_map", "collisions", "collisions.is_collision", "raw_metrics"}
 
     @classmethod
     def _extract_scalars_from_info(
@@ -420,8 +420,8 @@ class PPOTrainerNO(BaseRLTrainerNonOracle):
             self.config.TENSORBOARD_DIR, flush_secs=self.flush_secs
         ) as writer:
             for update in range(self.num_updates_done, self.config.NUM_UPDATES):
-                logger.info(f'Scenes Loaded: {",".join(self.train_scenes)}')
-                logger.info(f'Episodes Loaded: {",".join(self.train_episodes)}')
+                #logger.info(f'Scenes Loaded: {",".join(self.train_scenes)}')
+                #logger.info(f'Episodes Loaded: {",".join(self.train_episodes)}')
                 self.num_updates_done = update
                 if ppo_cfg.use_linear_lr_decay:
                     lr_scheduler.step()
@@ -716,7 +716,19 @@ class PPOTrainerNO(BaseRLTrainerNonOracle):
             and self.envs.num_envs > 0
         ):
             current_episodes = self.envs.current_episodes()
-
+            n_envs = self.envs.num_envs
+            
+            # Adding rgb frames to video at the starting of each episode
+            if len(self.config.VIDEO_OPTION) > 0:
+                infos = self.envs.get_metrics()
+                for i in range(n_envs):
+                    if len(rgb_frames[i]) == 0:
+                        frame = observations_to_image(observation=observations[i], info=infos[i])
+                        if self.config.VIDEO_RENDER_ALL_INFO:
+                            _m = self._extract_scalars_from_info(infos[i])
+                            _m["reward"] = current_episode_reward[i].item()
+                            frame = overlay_frame(frame, _m)
+                        rgb_frames[i].append(frame)
             with torch.no_grad():
                 (
                     _,
@@ -749,7 +761,7 @@ class PPOTrainerNO(BaseRLTrainerNonOracle):
             )
 
             # Reset global map
-            #test_global_map_visualization = not_done_masks.unsqueeze(2).unsqueeze(3).cpu() * test_global_map_visualization
+            test_global_map_visualization = not_done_masks.unsqueeze(2).unsqueeze(3).cpu() * test_global_map_visualization
 
             rewards = torch.tensor(
                 rewards, dtype=torch.float, device=self.device
@@ -757,7 +769,6 @@ class PPOTrainerNO(BaseRLTrainerNonOracle):
             current_episode_reward += rewards
             next_episodes = self.envs.current_episodes()
             envs_to_pause = []
-            n_envs = self.envs.num_envs
             for i in range(n_envs):
                 if current_episodes[i].episode_id not in all_actions:
                     all_actions[current_episodes[i].episode_id] = []
@@ -822,10 +833,18 @@ class PPOTrainerNO(BaseRLTrainerNonOracle):
                     s = map_config.egocentric_map_size
                     temp = torch.max(test_global_map_visualization[i][grid_x - math.floor(s/2):grid_x + math.ceil(s/2),grid_y - math.floor(s/2):grid_y + math.ceil(s/2),:], projection1)
                     test_global_map_visualization[i][grid_x - math.floor(s/2):grid_x + math.ceil(s/2),grid_y - math.floor(s/2):grid_y + math.ceil(s/2),:] = temp
-                    global_map1 = rotate_tensor(test_global_map_visualization[i][grid_x - math.floor(51/2):grid_x + math.ceil(51/2),grid_y - math.floor(51/2):grid_y + math.ceil(51/2),:].permute(2, 1, 0).unsqueeze(0), torch.tensor(-(observations[i]["compass"])).unsqueeze(0)).squeeze(0).permute(1, 2, 0).numpy()
-                    egocentric_map = torch.sum(test_global_map[i, grid_x - math.floor(51/2):grid_x+math.ceil(51/2), grid_y - math.floor(51/2):grid_y + math.ceil(51/2),:], dim=2)
+                    global_map1 = rotate_tensor(
+                                    test_global_map_visualization[i][grid_x - math.floor(map_config.local_map_size/2):
+                                        grid_x + math.ceil(map_config.local_map_size/2),
+                                        grid_y - math.floor(map_config.local_map_size/2):
+                                        grid_y + math.ceil(map_config.local_map_size/2),:].permute(2, 1, 0).unsqueeze(0), 
+                                    torch.tensor(-(observations[i]["compass"])).unsqueeze(0)).squeeze(0).permute(1, 2, 0).numpy()
+                    
+                    egocentric_map = torch.sum(test_global_map[i, :, :,:], dim=2)
 
-                    frame = observations_to_image(observations[i], projection1.data.numpy(), egocentric_map.data.cpu().numpy(), global_map1, infos[i], actions[i].cpu().numpy())
+                    frame = observations_to_image(observations[i], projected_features=projection1.data.numpy(), 
+                                    egocentric_projection=egocentric_map.cpu().numpy(), 
+                                    global_map=global_map1, info=infos[i], action=actions[i].cpu().numpy())
                     
                     if self.config.VIDEO_RENDER_ALL_INFO:
                         _m = self._extract_scalars_from_info(infos[i])
@@ -984,7 +1003,7 @@ class PPOTrainerO(BaseRLTrainerOracle):
         """
         return torch.load(checkpoint_path, *args, **kwargs)
 
-    METRICS_BLACKLIST = {"top_down_map", "collisions.is_collision", "raw_metrics", "traj_metrics"}
+    METRICS_BLACKLIST = {"top_down_map", "collisions", "collisions.is_collision", "raw_metrics", "traj_metrics"}
 
     @classmethod
     def _extract_scalars_from_info(
@@ -1484,6 +1503,20 @@ class PPOTrainerO(BaseRLTrainerOracle):
             and self.envs.num_envs > 0
         ):
             current_episodes = self.envs.current_episodes()
+            
+            n_envs = self.envs.num_envs
+            
+            # Adding rgb frames to video at the starting of each episode
+            if len(self.config.VIDEO_OPTION) > 0:
+                infos = self.envs.get_metrics()
+                for i in range(n_envs):
+                    if len(rgb_frames[i]) == 0:
+                        frame = observations_to_image(observation=observations[i], info=infos[i])
+                        if self.config.VIDEO_RENDER_ALL_INFO:
+                            _m = self._extract_scalars_from_info(infos[i])
+                            _m["reward"] = current_episode_reward[i].item()
+                            frame = overlay_frame(frame, _m)
+                        rgb_frames[i].append(frame)
 
             with torch.no_grad():
                 (
@@ -1520,7 +1553,6 @@ class PPOTrainerO(BaseRLTrainerOracle):
             current_episode_reward += rewards
             next_episodes = self.envs.current_episodes()
             envs_to_pause = []
-            n_envs = self.envs.num_envs
             for i in range(n_envs):
                 if current_episodes[i].episode_id not in all_actions:
                     all_actions[current_episodes[i].episode_id] = []
