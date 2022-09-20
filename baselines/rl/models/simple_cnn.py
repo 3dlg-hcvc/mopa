@@ -15,12 +15,14 @@ class RGBCNNNonOracle(nn.Module):
         output_size: The size of the embedding vector
     """
 
-    def __init__(self, observation_space, output_size):
+    def __init__(self, observation_space, output_size, output_depth=32):
         super().__init__()
         if "rgb" in observation_space.spaces:
             self._n_input_rgb = observation_space.spaces["rgb"].shape[2]
         else:
             self._n_input_rgb = 0
+            
+        self.output_depth = output_depth
 
         if "depth" in observation_space.spaces:
             self._n_input_depth = observation_space.spaces["depth"].shape[2]
@@ -73,13 +75,13 @@ class RGBCNNNonOracle(nn.Module):
                 nn.ReLU(True),
                 nn.Conv2d(
                     in_channels=64,
-                    out_channels=32,
+                    out_channels=self.output_depth,
                     kernel_size=self._cnn_layers_kernel_size[2],
                     stride=self._cnn_layers_stride[2],
                 ),
                  nn.ReLU(True),
                 # Flatten(),
-                # nn.Linear(32 * cnn_dims[0] * cnn_dims[1], output_size),
+                # nn.Linear(self.output_depth * cnn_dims[0] * cnn_dims[1], output_size),
                 # nn.ReLU(True),
             )
 

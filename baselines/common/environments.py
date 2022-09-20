@@ -38,6 +38,9 @@ class MultiObjNavRLEnv(habitat.RLEnv):
         self._reward_measure_name = self._rl_config.REWARD_MEASURE
         self._success_measure_name = self._rl_config.SUCCESS_MEASURE
         self._subsuccess_measure_name = self._rl_config.SUBSUCCESS_MEASURE
+        self._success_reward_measure_name = self._rl_config.SUCCESS_REWARD_MEASURE
+        self._subsuccess_reward_measure_name = self._rl_config.SUBSUCCESS_REWARD_MEASURE
+        self._new_reward_structure = self._rl_config.NEW_REWARD_STRUCTURE
 
         self._previous_measure = None
         self._previous_action = None
@@ -127,10 +130,18 @@ class MultiObjNavRLEnv(habitat.RLEnv):
             self._previous_measure = self._env.get_metrics()[self._reward_measure_name]
 
         if self._episode_success():
-            reward += self._rl_config.SUCCESS_REWARD
-        elif self._episode_subsuccess():
-            reward += self._rl_config.SUBSUCCESS_REWARD
-        elif self._env.task.is_found_called and self._rl_config.FALSE_FOUND_PENALTY:
+            if self._new_reward_structure:
+                # Success reward depends on SPL to encourage reaching final goal while taking shorter path
+                reward += (self._rl_config.SUCCESS_REWARD * self._env.get_metrics()[self._success_reward_measure_name])
+            else:
+                reward += self._rl_config.SUCCESS_REWARD
+        if self._episode_subsuccess():
+            if self._new_reward_structure:
+                # Sub-success reward depends on PSPL to encourage reaching all goals while taking shorter path
+                reward += (self._rl_config.SUBSUCCESS_REWARD * self._env.get_metrics()[self._subsuccess_reward_measure_name])
+            else:
+                reward += self._rl_config.SUBSUCCESS_REWARD
+        if self._env.task.is_found_called and self._rl_config.FALSE_FOUND_PENALTY:
             reward -= self._rl_config.FALSE_FOUND_PENALTY_VALUE
 
         return reward

@@ -217,8 +217,8 @@ class BaselineNetNonOracle(Net):
         self.global_map_depth = global_map_depth
         self.local_map_size = map_config.local_map_size
 
-        self.visual_encoder = RGBCNNNonOracle(observation_space, hidden_size)
-        self.map_encoder = MapCNN(self.local_map_size, 256, "non-oracle")        
+        self.visual_encoder = RGBCNNNonOracle(observation_space, hidden_size, self.global_map_depth)
+        self.map_encoder = MapCNN(self.local_map_size, 256, "non-oracle", _n_input_map=self.global_map_depth)        
 
         self.projection = Projection(egocentric_map_size, global_map_size, 
             device, coordinate_min, coordinate_max
@@ -227,7 +227,7 @@ class BaselineNetNonOracle(Net):
         self.to_grid = to_grid(global_map_size, coordinate_min, coordinate_max)
         self.rotate_tensor = RotateTensor(device)
 
-        self.image_features_linear = nn.Linear(32 * 28 * 28, 512)
+        self.image_features_linear = nn.Linear(self.global_map_depth * 28 * 28, 512)
 
         self.flatten = Flatten()
 
