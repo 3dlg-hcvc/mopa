@@ -71,6 +71,10 @@ class MultiObjectNavDatasetV1(PointNavDatasetV1):
     content_scenes_path: str = "{data_path}/content/{scene}.json.gz"
 
     def __init__(self, config: Optional[Config] = None) -> None:
+        self.config = config
+        self.num_goals = (self.config.NUM_GOALS 
+                          if self.config and self.config.NUM_GOALS > 0 
+                          else 10) # take all goals if NUM_GOALS is not set
         super().__init__(config)
 
     def from_json(
@@ -102,7 +106,7 @@ class MultiObjectNavDatasetV1(PointNavDatasetV1):
 
                 episode.scene_id = os.path.join(scenes_dir, episode.scene_id)
 
-            episode.goals = [MultiObjectGoal(**i) for i in episode.goals]
+            episode.goals = [MultiObjectGoal(**i) for i in episode.goals[:self.num_goals]]
             episode.distractors = [MultiObjectGoal(**i) for i in episode.distractors]
 
             self.episodes.append(episode)
