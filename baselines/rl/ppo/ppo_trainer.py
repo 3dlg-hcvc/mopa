@@ -577,6 +577,7 @@ class PPOTrainerNO(BaseRLTrainerNonOracle):
                     
                 writer.add_scalar(f"metrics/total_scenes_loaded", len(self.train_scenes), count_steps)
                 writer.add_scalar(f"metrics/total_episodes_loaded", len(self.train_episodes), count_steps)
+                writer.add_scalar(f"metrics/number_of_goals", self.config.TASK_CONFIG.DATASET.NUM_GOALS, count_steps)
                 
                 writer.add_scalar("train/losses_value", value_loss, count_steps)
                 writer.add_scalar("train/losses_policy", action_loss, count_steps)
