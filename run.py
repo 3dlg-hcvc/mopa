@@ -72,7 +72,7 @@ def run_exp(exp_config: str, run_type: str, agent_type: str, opts=None) -> None:
         trainer_init = baseline_registry.get_trainer(config.TRAINER_NAME)
         config.defrost()
         config.TASK_CONFIG.TRAINER_NAME = config.TRAINER_NAME
-        config.RL.PPO.hidden_size = 512
+        #config.RL.PPO.hidden_size = 512
         if config.TRAINER_NAME == "semantic":
                 config.TASK_CONFIG.TASK.MEASUREMENTS.append('FOW_MAP')
         config.freeze()

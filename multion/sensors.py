@@ -8,7 +8,7 @@ from gym import spaces
 from habitat.config import Config
 from habitat.core.registry import registry
 from habitat.core.simulator import Sensor, SensorTypes, Simulator
-from habitat.tasks.nav.nav import HeadingSensor
+from habitat.tasks.nav.nav import HeadingSensor, PointGoalSensor
 from habitat.core.dataset import Dataset
 from habitat.utils.geometry_utils import (
     quaternion_from_coeff,
@@ -479,3 +479,42 @@ class SemOccSensor(Sensor):
         # debugging - end
         
         return sem_map
+
+@registry.register_sensor(name="PointGoalWithGPSCompassSensor")
+class IntegratedPointGoalGPSAndCompassSensor(PointGoalSensor):
+    r"""Sensor that integrates PointGoals observations (which are used PointGoal Navigation) and GPS+Compass.
+
+    For the agent in simulator the forward direction is along negative-z.
+    In polar coordinate format the angle returned is azimuth to the goal.
+
+    Args:
+        sim: reference to the simulator for calculating task observations.
+        config: config for the PointGoal sensor. Can contain field for
+            GOAL_FORMAT which can be used to specify the format in which
+            the pointgoal is specified. Current options for goal format are
+            cartesian and polar.
+
+            Also contains a DIMENSIONALITY field which specifes the number
+            of dimensions ued to specify the goal, must be in [2, 3]
+
+    Attributes:
+        _goal_format: format for specifying the goal which can be done
+            in cartesian or polar coordinates.
+        _dimensionality: number of dimensions used to specify the goal
+    """
+    cls_uuid: str = "pointgoal_with_gps_compass"
+
+    def _get_uuid(self, *args: Any, **kwargs: Any) -> str:
+        return self.cls_uuid
+
+    def get_observation(
+        self, observations, episode, *args: Any, **kwargs: Any
+    ):
+        agent_state = self._sim.get_agent_state()
+        agent_position = agent_state.position
+        rotation_world_agent = agent_state.rotation
+        goal_position = np.array(episode.goals[kwargs["task"].current_goal_index].position, dtype=np.float32)
+
+        return self._compute_pointgoal(
+            agent_position, rotation_world_agent, goal_position
+        )
