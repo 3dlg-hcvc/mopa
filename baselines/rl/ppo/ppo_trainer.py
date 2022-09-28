@@ -2127,7 +2127,7 @@ class PPOTrainer(BaseRLTrainer):
         """
         return torch.load(checkpoint_path, *args, **kwargs)
 
-    METRICS_BLACKLIST = {"top_down_map", "collisions.is_collision"}
+    METRICS_BLACKLIST = {"top_down_map", "collisions", "collisions.is_collision", "raw_metrics"}
 
     @classmethod
     def _extract_scalars_from_info(
@@ -2839,7 +2839,7 @@ class PPOTrainer(BaseRLTrainer):
                             video_option=self.config.VIDEO_OPTION,
                             video_dir=self.config.VIDEO_DIR,
                             images=rgb_frames[i],
-                            episode_id=current_episodes[i].episode_id,
+                            episode_id=os.path.basename(current_episodes[i].scene_id) + '_' + current_episodes[i].episode_id,
                             checkpoint_idx=checkpoint_index,
                             metrics=self._extract_scalars_from_info(infos[i]),
                             fps=self.config.VIDEO_FPS,
@@ -2853,10 +2853,12 @@ class PPOTrainer(BaseRLTrainer):
                 elif len(self.config.VIDEO_OPTION) > 0:
                     # TODO move normalization / channel changing out of the policy and undo it here
                     frame = observations_to_image(
-                        {k: v[i] for k, v in batch.items()}, infos[i]
+                            observation=observations[i], info=infos[i], action=actions[i].cpu().numpy()
                     )
                     if self.config.VIDEO_RENDER_ALL_INFO:
-                        frame = overlay_frame(frame, infos[i])
+                        _m = self._extract_scalars_from_info(infos[i])
+                        _m["reward"] = current_episode_reward[i].item()
+                        frame = overlay_frame(frame, _m)
 
                     rgb_frames[i].append(frame)
 
