@@ -9,7 +9,7 @@ import random
 import numpy as np
 import torch
 from habitat_baselines.common.baseline_registry import baseline_registry
-from baselines.rl.ppo.ppo_trainer import PPOTrainerNO
+from baselines.rl.ppo.ppo_trainer_hier import HierOnTrainer
 from baselines.config.default import get_config
 from baselines.nonlearning_agents import (
     evaluate_agent,
@@ -31,13 +31,6 @@ def main():
     )
 
     parser.add_argument(
-        "--agent-type",
-        choices=["no-map", "oracle", "oracle-ego", "proj-neural", "obj-recog", "semantic", "ora-obj-vis"],
-        required=True,
-        help="agent type: oracle, oracleego, projneural, objrecog, semantic, ora-obj-vis",
-    )
-
-    parser.add_argument(
         "opts",
         default=None,
         nargs=argparse.REMAINDER,
@@ -48,7 +41,7 @@ def main():
     run_exp(**vars(args))
 
 
-def run_exp(exp_config: str, run_type: str, agent_type: str, opts=None) -> None:
+def run_exp(exp_config: str, run_type: str, opts=None) -> None:
     r"""Runs experiment given mode and config
 
     Args:
@@ -68,43 +61,11 @@ def run_exp(exp_config: str, run_type: str, agent_type: str, opts=None) -> None:
         evaluate_agent(config)
         return
     
-    if "TRAINER_NAME" in config and config.TRAINER_NAME not in ["ppo"]:
-        trainer_init = baseline_registry.get_trainer(config.TRAINER_NAME)
-        config.defrost()
-        config.TASK_CONFIG.TRAINER_NAME = config.TRAINER_NAME
-        #config.RL.PPO.hidden_size = 512
-        if config.TRAINER_NAME == "semantic":
-                config.TASK_CONFIG.TASK.MEASUREMENTS.append('FOW_MAP')
-        config.freeze()
-    else:
-        config.defrost()
-        config.TRAINER_NAME = agent_type
-        config.TASK_CONFIG.TRAINER_NAME = agent_type
-        config.freeze()
-
-        if agent_type in ["oracle", "oracle-ego", "no-map", "ora-obj-vis"]:
-            trainer_init = baseline_registry.get_trainer("oracle")
-            config.defrost()
-            #config.RL.PPO.hidden_size = 512 if agent_type=="no-map" else 768 --- set this in the config
-            config.TASK_CONFIG.SIMULATOR.DEPTH_SENSOR.MIN_DEPTH = 0.5
-            config.TASK_CONFIG.SIMULATOR.DEPTH_SENSOR.MAX_DEPTH = 5.0
-            config.TASK_CONFIG.SIMULATOR.AGENT_0.HEIGHT = 1.5
-            if agent_type == "oracle-ego":
-                config.TASK_CONFIG.TASK.MEASUREMENTS.append('FOW_MAP')
-            config.freeze()
-        elif agent_type in ["obj-recog"]:
-            trainer_init = baseline_registry.get_trainer("obj-recog")
-            config.defrost()
-            config.RL.PPO.hidden_size = 512
-            config.freeze()
-        else:
-            trainer_init = baseline_registry.get_trainer("non-oracle")
-            config.defrost()
-            #config.RL.PPO.hidden_size = 512
-            if agent_type == "semantic":
-                config.TASK_CONFIG.TASK.MEASUREMENTS.append('FOW_MAP')
-            config.freeze()
-        
+    trainer_init = baseline_registry.get_trainer(config.TRAINER_NAME)
+    config.defrost()
+    config.TASK_CONFIG.TRAINER_NAME = config.TRAINER_NAME
+    config.freeze()
+    
     assert trainer_init is not None, f"{config.TRAINER_NAME} is not supported"
     trainer = trainer_init(config)
 
@@ -115,6 +76,3 @@ def run_exp(exp_config: str, run_type: str, agent_type: str, opts=None) -> None:
 
 if __name__ == "__main__":
     main()
-
-    #MIN_DEPTH: 0.5
-    #MAX_DEPTH: 5.0

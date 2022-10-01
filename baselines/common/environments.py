@@ -63,7 +63,6 @@ class MultiObjNavRLEnv(habitat.RLEnv):
 
     def reset(self):
         self._previous_action = None
-        self.task.current_goal_index = 0
         observations = super().reset()
         self._previous_measure = self._env.get_metrics()[
             self._reward_measure_name
@@ -93,6 +92,22 @@ class MultiObjNavRLEnv(habitat.RLEnv):
             self.task.current_goal_index == len(self.current_episode.goals):
             self.task._is_episode_active = False
             self._env._episode_over = True
+
+        # Update observations for all sensors once a sub-goal is reached
+        # For hierarchical agent
+        if self.task.is_found_called == True and \
+            self.task.measurements.measures[
+                "sub_success" #"current_goal_success"
+            ].get_metric() == 1 and \
+                self.task.current_goal_index < len(self.current_episode.goals):
+            observations.update(
+                self.task.sensor_suite.get_observations(
+                    observations=observations,
+                    episode=self.current_episode,
+                    action=action,
+                    task=self.task,
+                )
+            )
 
         reward = self.get_reward(observations, **kwargs)
         done = self.get_done(observations)

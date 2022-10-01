@@ -7,8 +7,10 @@ import abc
 import math
 import numpy as np
 import torch
+from gym import spaces
 import torch.nn as nn
 import torch.nn.functional as F
+from habitat.config import Config
 from baselines.common.utils import Flatten, to_grid
 from baselines.rl.models.simple_cnn import (
     RGBCNNNonOracle, 
@@ -16,15 +18,44 @@ from baselines.rl.models.simple_cnn import (
     MapCNN,
     )
 from baselines.rl.models.projection import Projection, RotateTensor, get_grid
-from habitat_baselines.rl.ppo.policy import NetPolicy, Net
+from habitat_baselines.rl.ppo.policy import Net, NetPolicy
 from habitat_baselines.rl.models.rnn_state_encoder import (
     build_rnn_state_encoder,
 )
+from habitat_baselines.common.baseline_registry import baseline_registry
 from baselines.rl.models.rnn_state_encoder import RNNStateEncoder
 from habitat_baselines.utils.common import CategoricalNet
 
 from habitat.core.utils import try_cv2_import
 cv2 = try_cv2_import()
+
+class HierNetPolicy(NetPolicy):
+    def act(
+        self,
+        observations,
+        rnn_hidden_states,
+        prev_actions,
+        masks,
+        goal_observations,
+        deterministic=False,
+    ):
+        features, rnn_hidden_states = self.net(
+            observations, rnn_hidden_states, prev_actions, masks, goal_observations
+        )
+        distribution = self.action_distribution(features)
+        value = self.critic(features)
+
+        if deterministic:
+            if self.action_distribution_type == "categorical":
+                action = distribution.mode()
+            elif self.action_distribution_type == "gaussian":
+                action = distribution.mean
+        else:
+            action = distribution.sample()
+
+        action_log_probs = distribution.log_probs(action)
+
+        return value, action, action_log_probs, rnn_hidden_states
 
 class PolicyNonOracle(nn.Module):
     def __init__(self, net, dim_actions):
@@ -460,3 +491,4 @@ class BaselineNetOracle(Net):
             x = torch.cat(x, dim=1)
         x, rnn_hidden_states = self.state_encoder(x, rnn_hidden_states, masks)
         return x, rnn_hidden_states  
+
