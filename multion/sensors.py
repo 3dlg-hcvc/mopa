@@ -19,6 +19,7 @@ from multion.task import MultiObjectGoalNavEpisode
 from habitat.utils.visualizations import maps, fog_of_war
 from multion import maps as multion_maps
 from PIL import Image   #debugging
+import quaternion
 
 SLURM_JOBID = os.environ.get("SLURM_JOB_ID", None)
 SLURM_TMPDIR = os.environ.get("SLURM_TMPDIR", None)
@@ -177,6 +178,38 @@ class EpisodicCompassSensor(HeadingSensor):
         return self._quat_to_xy_heading(
             rotation_world_agent.inverse() * rotation_world_start
         )
+        
+@registry.register_sensor(name="RotationSensor")
+class RotationSensor(Sensor):
+    r"""The agent's world rotation
+    """
+    cls_uuid: str = "agent_rotation"
+    def __init__(self, sim, config, **kwargs: Any):
+        self._sim = sim
+        super().__init__(config=config)
+
+    def _get_uuid(self, *args: Any, **kwargs: Any):
+        return self.cls_uuid
+    
+    def _get_sensor_type(self, *args: Any, **kwargs: Any):
+        return SensorTypes.HEADING
+
+    # Defines the size and range of the observations of the sensor
+    def _get_observation_space(self, *args: Any, **kwargs: Any):
+        return spaces.Box(
+            low=np.finfo(np.float32).min,
+            high=np.finfo(np.float32).max,
+            shape=(34,),
+            dtype=np.float32,
+        )
+
+    def get_observation(
+        self, *args: Any, observations, episode, **kwargs: Any
+    ):
+        agent_state = self._sim.get_agent_state()
+        rotation_world_agent = agent_state.rotation
+
+        return quaternion.as_float_array(rotation_world_agent)
 
 @registry.register_sensor(name="GPSSensor")
 class EpisodicGPSSensor(Sensor):
@@ -479,6 +512,197 @@ class SemOccSensor(Sensor):
         # debugging - end
         
         return sem_map
+
+@registry.register_sensor(name="ObjectMapSensor")
+class ObjectMapSensor(Sensor):
+    r"""
+        Map with Goals and Distractors marked
+    Args:
+        sim: reference to the simulator for calculating task observations.
+        config: sensor config
+    Attributes:
+        
+    """
+    cls_uuid: str = "object_map"
+    def __init__(
+        self, sim: Simulator, config: Config, *args: Any, **kwargs: Any
+    ):
+        self._sim = sim
+        
+        self.mapCache = {}
+        self.cache_max_size = config.cache_max_size
+        self.map_size = config.map_size
+        self.meters_per_pixel = config.meters_per_pixel
+        self.num_samples = config.num_samples
+        self.nav_threshold = config.nav_threshold
+        self.map_channels = config.MAP_CHANNELS
+        self.draw_border = config.draw_border   #false
+        self.with_sampling = config.with_sampling # true
+        self.objIndexOffset = 1
+        self.channel_num = 1
+        
+        super().__init__(config=config)
+
+    def _get_uuid(self, *args: Any, **kwargs: Any):
+        return self.cls_uuid
+
+    def _get_sensor_type(self, *args: Any, **kwargs: Any):
+        return SensorTypes.SEMANTIC
+
+    def _get_observation_space(self, *args: Any, **kwargs: Any):
+        return spaces.Box(
+            low=0,
+            high=10,
+            shape=(self.map_size, self.map_size, self.map_channels),
+            dtype=np.int,
+        )
+        
+    def get_observation(
+        self, *args: Any, observations, episode, **kwargs: Any
+    ):
+        agent_state = self._sim.get_agent_state()
+        agent_position = agent_state.position
+        agent_vertical_pos = str(round(agent_position[1], 2))
+        
+        if (episode.scene_id in self.mapCache and 
+                agent_vertical_pos in self.mapCache[episode.scene_id]):
+            top_down_map = self.mapCache[episode.scene_id][agent_vertical_pos].copy()
+            
+        else:
+            top_down_map = multion_maps.get_topdown_map_from_sim(
+                self._sim,
+                draw_border=self.draw_border,
+                meters_per_pixel=self.meters_per_pixel,
+                with_sampling=self.with_sampling,
+                num_samples=self.num_samples,
+                nav_threshold=self.nav_threshold
+            )
+            if episode.scene_id not in self.mapCache:
+                if len(self.mapCache) > self.cache_max_size:
+                    # Reset cache when cache size exceeds max size
+                    self.mapCache = {}
+                self.mapCache[episode.scene_id] = {}
+            self.mapCache[episode.scene_id][agent_vertical_pos] = top_down_map.copy()
+            
+        object_map = np.zeros((self.map_size, self.map_size, self.map_channels))
+        object_map[:top_down_map.shape[0], :top_down_map.shape[1], 0] = top_down_map
+
+        # Adding goal information on the map
+        for i in range(len(episode.goals)):
+            loc0 = episode.goals[i].position[0]
+            loc2 = episode.goals[i].position[2]
+            grid_loc = maps.to_grid(
+                loc2,
+                loc0,
+                top_down_map.shape[0:2],
+                sim=self._sim,
+            )
+            object_map[grid_loc[0], 
+                        grid_loc[1],
+                        self.channel_num] = (
+                                kwargs['task'].object_to_datset_mapping[episode.goals[i].object_category]
+                                + self.objIndexOffset
+                            )
+
+        for i in range(len(episode.distractors)):
+            loc0 = episode.distractors[i].position[0]
+            loc2 = episode.distractors[i].position[2]
+            grid_loc = maps.to_grid(
+                loc2,
+                loc0,
+                top_down_map.shape[0:2],
+                sim=self._sim,
+            )
+            object_map[grid_loc[0], 
+                        grid_loc[1],
+                        self.channel_num] = (
+                                        kwargs['task'].object_to_datset_mapping[episode.distractors[i].object_category] 
+                                        + self.objIndexOffset
+                                    )
+
+        agent_loc = maps.to_grid(
+                    agent_position[2],
+                    agent_position[0],
+                    top_down_map.shape[0:2],
+                    sim=self._sim,
+                )
+        object_map[agent_loc[0], 
+                    agent_loc[1],
+                    self.channel_num+1] = len(kwargs['task'].object_to_datset_mapping) + self.objIndexOffset
+
+        return object_map
+    
+@registry.register_sensor(name="OracleMapSizeSensor")
+class OracleMapSizeSensor(Sensor):
+    r"""
+        Oracle Map size
+    Args:
+        sim: reference to the simulator for calculating task observations.
+        config: sensor config
+    Attributes:
+        
+    """
+    cls_uuid: str = "oracle_map_size"
+    def __init__(
+        self, sim: Simulator, config: Config, *args: Any, **kwargs: Any
+    ):
+        self._sim = sim
+        
+        self.mapCache = {}
+        self.cache_max_size = config.cache_max_size
+        self.meters_per_pixel = config.meters_per_pixel
+        self.num_samples = config.num_samples
+        self.nav_threshold = config.nav_threshold
+        self.draw_border = config.draw_border   #false
+        self.with_sampling = config.with_sampling # true
+        
+        super().__init__(config=config)
+
+    def _get_uuid(self, *args: Any, **kwargs: Any):
+        return self.cls_uuid
+
+    def _get_sensor_type(self, *args: Any, **kwargs: Any):
+        return SensorTypes.SEMANTIC
+
+    def _get_observation_space(self, *args: Any, **kwargs: Any):
+        return spaces.Box(
+            low=0,
+            high=1000,
+            shape=(3, 2),
+            dtype=np.int,
+        )
+        
+    def get_observation(
+        self, *args: Any, observations, episode, **kwargs: Any
+    ):
+        agent_state = self._sim.get_agent_state()
+        agent_position = agent_state.position
+        agent_vertical_pos = str(round(agent_position[1], 2))
+        
+        if (episode.scene_id in self.mapCache and 
+                agent_vertical_pos in self.mapCache[episode.scene_id]):
+            top_down_map = self.mapCache[episode.scene_id][agent_vertical_pos]
+            
+        else:
+            top_down_map = multion_maps.get_topdown_map_from_sim(
+                self._sim,
+                draw_border=self.draw_border,
+                meters_per_pixel=self.meters_per_pixel,
+                with_sampling=self.with_sampling,
+                num_samples=self.num_samples,
+                nav_threshold=self.nav_threshold
+            )
+            if episode.scene_id not in self.mapCache:
+                if len(self.mapCache) > self.cache_max_size:
+                    # Reset cache when cache size exceeds max size
+                    self.mapCache = {}
+                self.mapCache[episode.scene_id] = {}
+            self.mapCache[episode.scene_id][agent_vertical_pos] = top_down_map
+            
+        pathfinder = self._sim.pathfinder
+        lower_bound, upper_bound = pathfinder.get_bounds()
+            
+        return np.array([np.array(top_down_map.shape), [lower_bound[2], lower_bound[0]], [upper_bound[2], upper_bound[0]]])
 
 @registry.register_sensor(name="PointGoalWithGPSCompassSensor")
 class IntegratedPointGoalGPSAndCompassSensor(PointGoalSensor):

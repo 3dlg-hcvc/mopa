@@ -192,7 +192,7 @@ def draw_found(view: np.ndarray, alpha: float = 1) -> np.ndarray:
 
 def observations_to_image(observation: Dict, projected_features: np.ndarray=None, 
         egocentric_projection: np.ndarray=None, global_map: np.ndarray=None, 
-        info: Dict=None, action: np.ndarray=None) -> np.ndarray:
+        info: Dict=None, action: np.ndarray=None, object_map: np.ndarray=None) -> np.ndarray:
 # def observations_to_image(observation: Dict, info: Dict, action: np.ndarray) -> np.ndarray:
     r"""Generate image of single frame from observation and info
     returned from a single environment step().
@@ -312,6 +312,27 @@ def observations_to_image(observation: Dict, projected_features: np.ndarray=None
             interpolation=cv2.INTER_CUBIC,
         )
         frame = np.concatenate((frame, goal_map), axis=1)
+        
+    if object_map is not None:
+        # Overlay object map on occupancy map
+        if not isinstance(object_map, np.ndarray):
+            object_map = object_map.cpu().numpy()
+        occ_max = np.max(object_map[:,:,0])
+        #map = object_map[:, :, 0] + (object_map[:, :, 1]+occ_max)
+        object_map = (object_map.sum(axis=2)).astype(np.uint8)
+        object_map = maps.colorize_topdown_map(object_map-2+multion_maps.MULTION_TOP_DOWN_MAP_START)
+        
+        # scale map to align with rgb view
+        old_h, old_w, _ = object_map.shape
+        _height = observation_size
+        _width = int(float(_height) / old_h * old_w)
+        # cv2 resize (dsize is width first)
+        object_map = cv2.resize(
+            object_map,
+            (_width, _height),
+            interpolation=cv2.INTER_CUBIC,
+        )
+        frame = np.concatenate((frame, object_map), axis=1)
 
     if info is not None and "top_down_map" in info and info["top_down_map"] is not None:
         top_down_map = info["top_down_map"]["map"]

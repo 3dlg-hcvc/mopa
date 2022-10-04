@@ -6,8 +6,12 @@
 
 from typing import Optional
 
+import torch
 import numpy as np
 from habitat.utils.visualizations import maps
+from habitat.tasks.utils import cartesian_to_polar
+from habitat.utils.geometry_utils import quaternion_rotate_vector
+import quaternion
 
 try:
     from habitat.sims.habitat_simulator.habitat_simulator import HabitatSim
@@ -18,14 +22,18 @@ except ImportError:
 # Multion Objects
 MULTION_CYL_OBJECT_CATEGORY = {'cylinder_red':0, 'cylinder_green':1, 'cylinder_blue':2, 'cylinder_yellow':3, 
                             'cylinder_white':4, 'cylinder_pink':5, 'cylinder_black':6, 'cylinder_cyan':7}
+MULTION_CYL_OBJECT_MAP = {0: 'cylinder_red', 1: 'cylinder_green', 2: 'cylinder_blue', 3: 'cylinder_yellow', 
+                            4: 'cylinder_white', 5:'cylinder_pink', 6: 'cylinder_black', 7: 'cylinder_cyan'}
 MULTION_TOP_DOWN_MAP_START = 20
 maps.TOP_DOWN_MAP_COLORS[MULTION_TOP_DOWN_MAP_START-1] = [150, 150, 150]
+maps.TOP_DOWN_MAP_COLORS[MULTION_TOP_DOWN_MAP_START-2] = [250, 250, 250]
 maps.TOP_DOWN_MAP_COLORS[MULTION_TOP_DOWN_MAP_START:MULTION_TOP_DOWN_MAP_START+8] = np.array(
     [[200, 0, 0], [0, 200, 0], [0, 0, 200], 
     [255, 255, 0], [250, 250, 250], [250, 45, 185], 
     [0, 0, 0], [0,255,255]], 
     dtype=np.uint8
 )
+maps.TOP_DOWN_MAP_COLORS[MULTION_TOP_DOWN_MAP_START+8] = [255,165,0]   # Agent location
 
 
 def get_topdown_map(
@@ -99,3 +107,40 @@ def get_topdown_map_from_sim(
         nav_threshold
     )
 
+def from_grid(
+    grid_locs,
+    grid_resolution,
+    lower_bound,
+    upper_bound,
+):
+    r"""
+        Similar to habitat.utils.visualizations.maps.from_grid, 
+        but without _sim
+    """
+
+    grid_size_x = abs(upper_bound[0] - lower_bound[0]) / grid_resolution[0]
+    grid_size_y = abs(upper_bound[1] - lower_bound[1]) / grid_resolution[1]
+    
+    realworld_x = lower_bound[0] + grid_locs[0] * grid_size_x
+    realworld_y = lower_bound[1] + grid_locs[1] * grid_size_y
+    realworld_coordinates = torch.stack([realworld_y, torch.zeros_like(realworld_x), realworld_x], axis=0)
+    
+    return realworld_coordinates
+
+def compute_pointgoal(
+        source_position, source_rotation, goal_position
+    ):
+        direction_vector = goal_position - source_position
+        
+        if not isinstance(source_rotation, quaternion.quaternion):
+            source_rotation = quaternion.as_quat_array(source_rotation)
+        
+        direction_vector_agent = quaternion_rotate_vector(
+            source_rotation.inverse(), direction_vector
+        )
+
+        rho, phi = cartesian_to_polar(
+            -direction_vector_agent[2], direction_vector_agent[0]
+        )
+        return np.array([rho, -phi], dtype=np.float32)
+    

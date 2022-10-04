@@ -8,13 +8,15 @@ import json
 import os
 import time
 from collections import defaultdict, deque
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple, Union
 from gym import spaces
 
 import random
 from einops import rearrange
 import math
 import numpy as np
+from numpy import ndarray
+from torch import Tensor
 import torch
 from torch import nn
 import torch.nn.functional as F
@@ -81,6 +83,8 @@ from baselines.rl.ddppo.policy import (  # noqa: F401.
 from habitat.tasks.nav.nav import (
     IntegratedPointGoalGPSAndCompassSensor,
 )
+from multion import maps as multion_maps
+from habitat.utils.visualizations import maps
 
 @baseline_registry.register_trainer(name="hieron")
 class HierOnTrainer(BaseRLTrainer):
@@ -896,6 +900,60 @@ class HierOnTrainer(BaseRLTrainer):
 
             self.envs.close()
 
+
+    def _pause_envs(
+        self,
+        envs_to_pause: List[int],
+        envs: VectorEnv,
+        test_recurrent_hidden_states: Tensor,
+        not_done_masks: Tensor,
+        current_episode_reward: Tensor,
+        prev_actions: Tensor,
+        batch: Dict[str, Tensor],
+        rgb_frames: Union[List[List[Any]], List[List[ndarray]]],
+        goal_observations: Tensor,
+    ) -> Tuple[
+        VectorEnv,
+        Tensor,
+        Tensor,
+        Tensor,
+        Tensor,
+        Dict[str, Tensor],
+        List[List[Any]],
+        Tensor,
+    ]:
+        # pausing self.envs with no new episode
+        if len(envs_to_pause) > 0:
+            state_index = list(range(envs.num_envs))
+            for idx in reversed(envs_to_pause):
+                state_index.pop(idx)
+                envs.pause_at(idx)
+
+            # indexing along the batch dimensions
+            test_recurrent_hidden_states = test_recurrent_hidden_states[
+                state_index
+            ]
+            not_done_masks = not_done_masks[state_index]
+            current_episode_reward = current_episode_reward[state_index]
+            prev_actions = prev_actions[state_index]
+            goal_observations = goal_observations[state_index]
+
+            for k, v in batch.items():
+                batch[k] = v[state_index]
+
+            rgb_frames = [rgb_frames[i] for i in state_index]
+
+        return (
+            envs,
+            test_recurrent_hidden_states,
+            not_done_masks,
+            current_episode_reward,
+            prev_actions,
+            batch,
+            rgb_frames,
+            goal_observations,
+        )
+
     def _eval_checkpoint(
         self,
         checkpoint_path: str,
@@ -994,6 +1052,18 @@ class HierOnTrainer(BaseRLTrainer):
             device=self.device,
             dtype=torch.long if discrete_actions else torch.float,
         )
+        goal_world_coordinates = torch.zeros(
+            self.config.NUM_ENVIRONMENTS,
+            3,  # 3D coordinates
+            device=self.device,
+            dtype=torch.float,
+        )
+        goal_observations = torch.zeros(
+            self.config.NUM_ENVIRONMENTS,
+            2,  # polar coordinates
+            device=self.device,
+            dtype=torch.float,
+        )
         not_done_masks = torch.zeros(
             self.config.NUM_ENVIRONMENTS,
             1,
@@ -1030,11 +1100,36 @@ class HierOnTrainer(BaseRLTrainer):
             and self.envs.num_envs > 0
         ):
             current_episodes = self.envs.current_episodes()
-
+            
+            # 1) Get map with all objects
+            object_maps = batch["object_map"]
+            for i in range(self.envs.num_envs):
+                # Perform steps 2-4 only when the agent is starting or a goal is reached
+                if prev_actions[i].item() == 0:
+                    # 2) Find next goal position on the map from map and goal category
+                    goal_grid_loc = ((object_maps[i,:,:,1]-1)==batch[i]['multiobjectgoal']).nonzero(as_tuple=False).squeeze(0)
+                    
+                    # 3) Convert map position to world position in 3D
+                    oracle_map_size = batch[i]["oracle_map_size"]
+                    goal_world_coordinates[i] = multion_maps.from_grid(goal_grid_loc,
+                                                            grid_resolution=oracle_map_size[0],
+                                                            lower_bound=oracle_map_size[1],
+                                                            upper_bound=oracle_map_size[2])
+                    
+                # 4) Convert 3D world positions to polar coordinates
+                agent_position = batch[i]["agent_position"]
+                agent_rotation = batch[i]["agent_rotation"]
+                goal_observations[i] = torch.tensor(multion_maps.compute_pointgoal(
+                                        agent_position.cpu().numpy(), 
+                                        agent_rotation.cpu().numpy(), 
+                                        goal_world_coordinates[i].cpu().numpy()), device=self.device)
+                
+                # goal_observations = batch[
+                #     IntegratedPointGoalGPSAndCompassSensor.cls_uuid
+                # ]
+                
+                # 5) Move to the goal
             with torch.no_grad():
-                goal_observations = batch[
-                    IntegratedPointGoalGPSAndCompassSensor.cls_uuid
-                ]
                 (
                     _,
                     actions,
@@ -1114,6 +1209,18 @@ class HierOnTrainer(BaseRLTrainer):
                     ] = episode_stats
 
                     if len(self.config.VIDEO_OPTION) > 0:
+                        frame = observations_to_image(
+                                observation=observations[i], info=infos[i], action=actions[i].cpu().numpy(),
+                                object_map=object_maps[i]
+                        )
+                        if self.config.VIDEO_RENDER_ALL_INFO:
+                            _m = self._extract_scalars_from_info(infos[i])
+                            _m["reward"] = current_episode_reward[i].item()
+                            _m["next_goal"] = multion_maps.MULTION_CYL_OBJECT_MAP[observations[i]['multiobjectgoal'][0]]
+                            frame = overlay_frame(frame, _m)
+
+                        rgb_frames[i].append(frame)
+                        
                         generate_video(
                             video_option=self.config.VIDEO_OPTION,
                             video_dir=self.config.VIDEO_DIR,
@@ -1131,18 +1238,19 @@ class HierOnTrainer(BaseRLTrainer):
                 # episode continues
                 else:
                     if len(self.config.VIDEO_OPTION) > 0:
-                        # TODO move normalization / channel changing out of the policy and undo it here
                         frame = observations_to_image(
-                                observation=observations[i], info=infos[i], action=actions[i].cpu().numpy()
+                                observation=observations[i], info=infos[i], action=actions[i].cpu().numpy(),
+                                object_map=object_maps[i]
                         )
                         if self.config.VIDEO_RENDER_ALL_INFO:
                             _m = self._extract_scalars_from_info(infos[i])
                             _m["reward"] = current_episode_reward[i].item()
+                            _m["next_goal"] = multion_maps.MULTION_CYL_OBJECT_MAP[observations[i]['multiobjectgoal'][0]]
                             frame = overlay_frame(frame, _m)
 
                         rgb_frames[i].append(frame)
 
-                    if actions[i] == 0 and infos[i]["sub_success"] == 1:
+                    if actions[i].item() == 0 and infos[i]["sub_success"] == 1:
                         test_recurrent_hidden_states[i] = torch.zeros(
                             self.actor_critic.num_recurrent_layers,
                             ppo_cfg.hidden_size,
@@ -1158,6 +1266,7 @@ class HierOnTrainer(BaseRLTrainer):
                 prev_actions,
                 batch,
                 rgb_frames,
+                goal_observations
             ) = self._pause_envs(
                 envs_to_pause,
                 self.envs,
@@ -1167,6 +1276,7 @@ class HierOnTrainer(BaseRLTrainer):
                 prev_actions,
                 batch,
                 rgb_frames,
+                goal_observations
             )
 
         num_episodes = len(stats_episodes)

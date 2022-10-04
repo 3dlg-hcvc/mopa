@@ -141,6 +141,11 @@ _C.TASK.GPS_SENSOR = CN()
 _C.TASK.GPS_SENSOR.TYPE = "GPSSensor"
 _C.TASK.GPS_SENSOR.DIMENSIONALITY = 2
 # -----------------------------------------------------------------------------
+# AGENT ROTATION SENSOR
+# -----------------------------------------------------------------------------
+_C.TASK.ROTATION_SENSOR = CN()
+_C.TASK.ROTATION_SENSOR.TYPE = "RotationSensor"
+# -----------------------------------------------------------------------------
 # PROXIMITY SENSOR
 # -----------------------------------------------------------------------------
 _C.TASK.PROXIMITY_SENSOR = CN()
@@ -187,6 +192,31 @@ _C.TASK.SEM_OCC_SENSOR.INCLUDE_DISTRACTORS = False
 _C.TASK.SEM_OCC_SENSOR.ORACLE_MAP_INCLUDE_DISTRACTORS_W_GOAL = False
 _C.TASK.SEM_OCC_SENSOR.num_distractors_included = -1
 # -----------------------------------------------------------------------------
+# Object Map SENSOR
+# -----------------------------------------------------------------------------
+_C.TASK.OBJECT_MAP_SENSOR = CN()
+_C.TASK.OBJECT_MAP_SENSOR.TYPE = "ObjectMapSensor"
+_C.TASK.OBJECT_MAP_SENSOR.meters_per_pixel = 0.3
+_C.TASK.OBJECT_MAP_SENSOR.num_samples = 50
+_C.TASK.OBJECT_MAP_SENSOR.nav_threshold = 0.3
+_C.TASK.OBJECT_MAP_SENSOR.MAP_CHANNELS = 3
+_C.TASK.OBJECT_MAP_SENSOR.draw_border = False
+_C.TASK.OBJECT_MAP_SENSOR.with_sampling = True
+_C.TASK.OBJECT_MAP_SENSOR.mask_map = False
+_C.TASK.OBJECT_MAP_SENSOR.cache_max_size = 2
+_C.TASK.OBJECT_MAP_SENSOR.map_size = 50
+# -----------------------------------------------------------------------------
+# Oracle Map Size SENSOR
+# -----------------------------------------------------------------------------
+_C.TASK.ORACLE_MAP_SIZE_SENSOR = CN()
+_C.TASK.ORACLE_MAP_SIZE_SENSOR.TYPE = "OracleMapSizeSensor"
+_C.TASK.ORACLE_MAP_SIZE_SENSOR.meters_per_pixel = _C.TASK.OBJECT_MAP_SENSOR.meters_per_pixel
+_C.TASK.ORACLE_MAP_SIZE_SENSOR.num_samples = _C.TASK.OBJECT_MAP_SENSOR.num_samples
+_C.TASK.ORACLE_MAP_SIZE_SENSOR.nav_threshold = _C.TASK.OBJECT_MAP_SENSOR.nav_threshold
+_C.TASK.ORACLE_MAP_SIZE_SENSOR.draw_border = _C.TASK.OBJECT_MAP_SENSOR.draw_border
+_C.TASK.ORACLE_MAP_SIZE_SENSOR.with_sampling = _C.TASK.OBJECT_MAP_SENSOR.with_sampling
+_C.TASK.ORACLE_MAP_SIZE_SENSOR.cache_max_size = 2
+# -----------------------------------------------------------------------------
 # SUCCESS MEASUREMENT
 # -----------------------------------------------------------------------------
 _C.TASK.SUCCESS = CN()
@@ -229,7 +259,7 @@ _C.TASK.TOP_DOWN_MAP.DRAW_VIEW_POINTS = True
 _C.TASK.TOP_DOWN_MAP.DRAW_GOAL_POSITIONS = True
 # Axes aligned bounding boxes
 _C.TASK.TOP_DOWN_MAP.DRAW_GOAL_AABBS = True
-_C.TASK.TOP_DOWN_MAP.DRAW_DISTRACTORS = False
+_C.TASK.TOP_DOWN_MAP.DRAW_DISTRACTORS = True
 # -----------------------------------------------------------------------------
 # COLLISIONS MEASUREMENT
 # -----------------------------------------------------------------------------
