@@ -205,6 +205,11 @@ _C.TASK.OBJECT_MAP_SENSOR.with_sampling = True
 _C.TASK.OBJECT_MAP_SENSOR.mask_map = False
 _C.TASK.OBJECT_MAP_SENSOR.cache_max_size = 2
 _C.TASK.OBJECT_MAP_SENSOR.map_size = 50
+_C.TASK.OBJECT_MAP_SENSOR.mask_map = False
+_C.TASK.OBJECT_MAP_SENSOR.VISIBILITY_DIST = 5.0
+_C.TASK.OBJECT_MAP_SENSOR.FOV = 80
+_C.TASK.OBJECT_MAP_SENSOR.object_padding = 2
+_C.TASK.OBJECT_MAP_SENSOR.object_ind_offset = 2
 # -----------------------------------------------------------------------------
 # Oracle Map Size SENSOR
 # -----------------------------------------------------------------------------

@@ -192,7 +192,8 @@ def draw_found(view: np.ndarray, alpha: float = 1) -> np.ndarray:
 
 def observations_to_image(observation: Dict, projected_features: np.ndarray=None, 
         egocentric_projection: np.ndarray=None, global_map: np.ndarray=None, 
-        info: Dict=None, action: np.ndarray=None, object_map: np.ndarray=None) -> np.ndarray:
+        info: Dict=None, action: np.ndarray=None, object_map: np.ndarray=None,
+        config: np.ndarray=None) -> np.ndarray:
 # def observations_to_image(observation: Dict, info: Dict, action: np.ndarray) -> np.ndarray:
     r"""Generate image of single frame from observation and info
     returned from a single environment step().
@@ -317,10 +318,8 @@ def observations_to_image(observation: Dict, projected_features: np.ndarray=None
         # Overlay object map on occupancy map
         if not isinstance(object_map, np.ndarray):
             object_map = object_map.cpu().numpy()
-        occ_max = np.max(object_map[:,:,0])
-        #map = object_map[:, :, 0] + (object_map[:, :, 1]+occ_max)
-        object_map = (object_map.sum(axis=2)).astype(np.uint8)
-        object_map = maps.colorize_topdown_map(object_map-2+multion_maps.MULTION_TOP_DOWN_MAP_START)
+        object_map = (object_map[:,:,1:].max(axis=-1)).astype(np.uint8)
+        object_map = multion_maps.OBJECT_MAP_COLORS[object_map]
         
         # scale map to align with rgb view
         old_h, old_w, _ = object_map.shape

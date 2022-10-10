@@ -900,7 +900,7 @@ class FowMap(Measure):
 
     def reset_metric(self, *args: Any, episode, task, **kwargs: Any):
         self._metric = None
-        self._top_down_map = task.sceneMap
+        self._top_down_map = task.measurements.measures[TopDownMap.cls_uuid].get_metric()
         self._fog_of_war_mask = np.zeros_like(self._top_down_map)
         self.update_metric(*args, episode=episode, task=task, **kwargs)
 

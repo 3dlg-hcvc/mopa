@@ -153,6 +153,13 @@ _C.RL.POLICY.ACTION_DIST.min_log_std = -5
 _C.RL.POLICY.ACTION_DIST.max_log_std = 2
 # For continuous action distributions (including gaussian):
 _C.RL.POLICY.ACTION_DIST.action_activation = "tanh"  # ['tanh', '']
+_C.RL.POLICY.EXPLORE_RADIUS = 30
+_C.RL.POLICY.EXPLORATION_STRATEGY = ""
+_C.RL.POLICY.global_map_size = 100
+_C.RL.POLICY.MAX_STEPS_BEFORE_GOAL_SELECTION = 10
+_C.RL.POLICY.local_map_size = 15
+_C.RL.POLICY.USE_LOCAL_MAP_FOR_STUBBORN = True
+_C.RL.POLICY.collision_threshold = 0
 # -----------------------------------------------------------------------------
 # OBS_TRANSFORMS CONFIG
 # -----------------------------------------------------------------------------
@@ -197,6 +204,16 @@ _C.RL.MAPS.USE_OCCUPANCY = False
 _C.RL.MAPS.num_classes = 15
 _C.RL.MAPS.num_occ_classes = 5
 _C.RL.MAPS.linear_out = 512
+# -----------------------------------------------------------------------------
+# SEMANTIC MAP POLICY
+# -----------------------------------------------------------------------------
+_C.RL.SEM_MAP_POLICY = CN()
+_C.RL.SEM_MAP_POLICY.map_size = 50
+_C.RL.SEM_MAP_POLICY.MAP_CHANNELS = 3
+_C.RL.SEM_MAP_POLICY.use_oracle_map = False
+_C.RL.SEM_MAP_POLICY.global_map_size = 150
+_C.RL.SEM_MAP_POLICY.coordinate_min = -62.3241
+_C.RL.SEM_MAP_POLICY.coordinate_max = 90.0399
 # -----------------------------------------------------------------------------
 # DECENTRALIZED DISTRIBUTED PROXIMAL POLICY OPTIMIZATION (DD-PPO)
 # -----------------------------------------------------------------------------

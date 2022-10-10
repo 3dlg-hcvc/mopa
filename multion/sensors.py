@@ -160,13 +160,33 @@ class HeadingSensor(Sensor):
         return self._quat_to_xy_heading(rotation_world_agent.inverse())
 
 @registry.register_sensor(name="CompassSensor")
-class EpisodicCompassSensor(HeadingSensor):
+class EpisodicCompassSensor(Sensor):
     r"""The agents heading in the coordinate frame defined by the epiosde,
     theta=0 is defined by the agents state at t=0
     """
-    cls_uuid: str = "compass"
+    cls_uuid: str = "episodic_compass"
+    def __init__(
+        self, sim: Simulator, config: Config, *args: Any, **kwargs: Any
+    ):
+        self._sim = sim
+        super().__init__(config=config)
+
+    def _get_sensor_type(self, *args: Any, **kwargs: Any):
+        return SensorTypes.HEADING
+    
     def _get_uuid(self, *args: Any, **kwargs: Any):
         return self.cls_uuid
+    
+    def _get_observation_space(self, *args: Any, **kwargs: Any):
+        return spaces.Box(low=-np.pi, high=np.pi, shape=(1,), dtype=np.float32)
+    
+    def _quat_to_xy_heading(self, quat):
+        direction_vector = np.array([0, 0, -1])
+
+        heading_vector = quaternion_rotate_vector(quat, direction_vector)
+
+        phi = cartesian_to_polar(-heading_vector[2], heading_vector[0])[1]
+        return np.array([phi], dtype=np.float32)
 
     def get_observation(
         self, *args: Any, observations, episode, **kwargs: Any
@@ -221,7 +241,7 @@ class EpisodicGPSSensor(Sensor):
     Attributes:
         _dimensionality: number of dimensions used to specify the agents position
     """
-    cls_uuid: str = "gps"
+    cls_uuid: str = "episodic_gps"
     def __init__(
         self, sim: Simulator, config: Config, *args: Any, **kwargs: Any
     ):
@@ -538,8 +558,12 @@ class ObjectMapSensor(Sensor):
         self.map_channels = config.MAP_CHANNELS
         self.draw_border = config.draw_border   #false
         self.with_sampling = config.with_sampling # true
-        self.objIndexOffset = 1
+        self.mask_map = config.mask_map
+        self.visibility_dist = config.VISIBILITY_DIST
+        self.fov = config.FOV
+        self.object_ind_offset = config.object_ind_offset
         self.channel_num = 1
+        self.object_padding = config.object_padding
         
         super().__init__(config=config)
 
@@ -556,6 +580,19 @@ class ObjectMapSensor(Sensor):
             shape=(self.map_size, self.map_size, self.map_channels),
             dtype=np.int,
         )
+        
+    def get_polar_angle(self):
+        agent_state = self._sim.get_agent_state()
+        # quaternion is in x, y, z, w format
+        ref_rotation = agent_state.rotation
+
+        heading_vector = quaternion_rotate_vector(
+            ref_rotation.inverse(), np.array([0, 0, -1])
+        )
+
+        phi = cartesian_to_polar(-heading_vector[2], heading_vector[0])[1]
+        z_neg_z_flip = np.pi
+        return np.array(phi) + z_neg_z_flip
         
     def get_observation(
         self, *args: Any, observations, episode, **kwargs: Any
@@ -584,8 +621,37 @@ class ObjectMapSensor(Sensor):
                 self.mapCache[episode.scene_id] = {}
             self.mapCache[episode.scene_id][agent_vertical_pos] = top_down_map.copy()
             
-        object_map = np.zeros((self.map_size, self.map_size, self.map_channels))
+        object_map = np.zeros((top_down_map.shape[0], top_down_map.shape[1], self.map_channels))
         object_map[:top_down_map.shape[0], :top_down_map.shape[1], 0] = top_down_map
+
+        # Get agent location on map
+        agent_loc = maps.to_grid(
+                    agent_position[2],
+                    agent_position[0],
+                    top_down_map.shape[0:2],
+                    sim=self._sim,
+                )
+
+        # Mark the agent location
+        object_map[max(0, agent_loc[0]-self.object_padding):min(top_down_map.shape[0], agent_loc[0]+self.object_padding),
+                    max(0, agent_loc[1]-self.object_padding):min(top_down_map.shape[1], agent_loc[1]+self.object_padding),
+                    self.channel_num+1] = 10 #len(kwargs['task'].object_to_datset_mapping) + self.object_ind_offset
+        
+
+        # Mask the map
+        if self.mask_map:
+            _fog_of_war_mask = np.zeros_like(top_down_map)
+            _fog_of_war_mask = fog_of_war.reveal_fog_of_war(
+                top_down_map,
+                _fog_of_war_mask,
+                np.array(agent_loc),
+                self.get_polar_angle(),
+                fov=self.fov,
+                max_line_len=self.visibility_dist
+                / self.meters_per_pixel,
+            )
+            object_map[:, :, self.channel_num] += 1
+            object_map[:, :, self.channel_num] *= _fog_of_war_mask # Hide unobserved areas
 
         # Adding goal information on the map
         for i in range(len(episode.goals)):
@@ -597,11 +663,11 @@ class ObjectMapSensor(Sensor):
                 top_down_map.shape[0:2],
                 sim=self._sim,
             )
-            object_map[grid_loc[0], 
-                        grid_loc[1],
+            object_map[grid_loc[0]-self.object_padding:grid_loc[0]+self.object_padding, 
+                        grid_loc[1]-self.object_padding:grid_loc[1]+self.object_padding,
                         self.channel_num] = (
                                 kwargs['task'].object_to_datset_mapping[episode.goals[i].object_category]
-                                + self.objIndexOffset
+                                + self.object_ind_offset
                             )
 
         for i in range(len(episode.distractors)):
@@ -613,24 +679,21 @@ class ObjectMapSensor(Sensor):
                 top_down_map.shape[0:2],
                 sim=self._sim,
             )
-            object_map[grid_loc[0], 
-                        grid_loc[1],
+            object_map[grid_loc[0]-self.object_padding:grid_loc[0]+self.object_padding, 
+                        grid_loc[1]-self.object_padding:grid_loc[1]+self.object_padding,
                         self.channel_num] = (
                                         kwargs['task'].object_to_datset_mapping[episode.distractors[i].object_category] 
-                                        + self.objIndexOffset
+                                        + self.object_ind_offset
                                     )
 
-        agent_loc = maps.to_grid(
-                    agent_position[2],
-                    agent_position[0],
-                    top_down_map.shape[0:2],
-                    sim=self._sim,
-                )
-        object_map[agent_loc[0], 
-                    agent_loc[1],
-                    self.channel_num+1] = len(kwargs['task'].object_to_datset_mapping) + self.objIndexOffset
+        # Hide the  out-of-view objects
+        if self.mask_map:
+            object_map[:, :, self.channel_num] *= _fog_of_war_mask   
+            
+        final_object_map = np.zeros((self.map_size, self.map_size, self.map_channels))
+        final_object_map[:top_down_map.shape[0], :top_down_map.shape[1], :] = object_map
 
-        return object_map
+        return final_object_map
     
 @registry.register_sensor(name="OracleMapSizeSensor")
 class OracleMapSizeSensor(Sensor):

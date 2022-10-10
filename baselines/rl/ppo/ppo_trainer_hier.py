@@ -15,7 +15,7 @@ import random
 from einops import rearrange
 import math
 import numpy as np
-from numpy import ndarray
+from numpy import dtype, ndarray
 from torch import Tensor
 import torch
 from torch import nn
@@ -912,6 +912,7 @@ class HierOnTrainer(BaseRLTrainer):
         batch: Dict[str, Tensor],
         rgb_frames: Union[List[List[Any]], List[List[ndarray]]],
         goal_observations: Tensor,
+        global_object_map: Tensor,
     ) -> Tuple[
         VectorEnv,
         Tensor,
@@ -921,6 +922,7 @@ class HierOnTrainer(BaseRLTrainer):
         Dict[str, Tensor],
         List[List[Any]],
         Tensor,
+        Tensor
     ]:
         # pausing self.envs with no new episode
         if len(envs_to_pause) > 0:
@@ -937,6 +939,7 @@ class HierOnTrainer(BaseRLTrainer):
             current_episode_reward = current_episode_reward[state_index]
             prev_actions = prev_actions[state_index]
             goal_observations = goal_observations[state_index]
+            global_object_map = global_object_map[state_index]
 
             for k, v in batch.items():
                 batch[k] = v[state_index]
@@ -952,6 +955,7 @@ class HierOnTrainer(BaseRLTrainer):
             batch,
             rgb_frames,
             goal_observations,
+            global_object_map,
         )
 
     def _eval_checkpoint(
@@ -998,6 +1002,11 @@ class HierOnTrainer(BaseRLTrainer):
         ):
             config.defrost()
             config.TASK_CONFIG.TASK.MEASUREMENTS.append("TOP_DOWN_MAP")
+            config.TASK_CONFIG.TASK.MEASUREMENTS.append("COLLISIONS")
+            config.freeze()
+
+        if self.config.RL.POLICY.EXPLORATION_STRATEGY == "stubborn":
+            config.defrost()
             config.TASK_CONFIG.TASK.MEASUREMENTS.append("COLLISIONS")
             config.freeze()
 
@@ -1064,12 +1073,38 @@ class HierOnTrainer(BaseRLTrainer):
             device=self.device,
             dtype=torch.float,
         )
+        is_goal = torch.zeros(
+            self.config.NUM_ENVIRONMENTS,
+            1,
+            device=self.device,
+            dtype=torch.long,
+        )
+        steps_towards_short_term_goal = torch.zeros(
+            self.config.NUM_ENVIRONMENTS,
+            1,
+            device=self.device,
+            dtype=torch.long,
+        )
+        collision_threshold_steps = torch.zeros(
+            self.config.NUM_ENVIRONMENTS,
+            1,
+            device=self.device,
+            dtype=torch.long,
+        )
+        global_object_map = torch.zeros(
+            self.config.NUM_ENVIRONMENTS,
+            self.config.RL.POLICY.global_map_size,
+            self.config.RL.POLICY.global_map_size,
+            device=self.device,
+            dtype=torch.float,
+        )
         not_done_masks = torch.zeros(
             self.config.NUM_ENVIRONMENTS,
             1,
             device=self.device,
             dtype=torch.bool,
         )
+        stubborn_goal_queues = [[] for _ in range(self.config.NUM_ENVIRONMENTS)]
         stats_episodes: Dict[
             Any, Any
         ] = {}  # dict of dicts that stores stats per episode
@@ -1102,20 +1137,99 @@ class HierOnTrainer(BaseRLTrainer):
             current_episodes = self.envs.current_episodes()
             
             # 1) Get map with all objects
-            object_maps = batch["object_map"]
+            if self.config.RL.SEM_MAP_POLICY.use_oracle_map:
+                object_maps = batch["object_map"]
+            else:
+                object_maps = self.build_semantic_map()
+                
+            object_maps[:, :, :, 1] = torch.max(object_maps[:, :, :, 1], global_object_map)
+            global_object_map = object_maps[:, :, :, 1]
+            oracle_map_size = batch["oracle_map_size"]
+            next_goal_category = batch['multiobjectgoal']
+            
             for i in range(self.envs.num_envs):
                 # Perform steps 2-4 only when the agent is starting or a goal is reached
                 if prev_actions[i].item() == 0:
+                    
+                    steps_towards_short_term_goal[i] = 0    # reset step counter
+                    collision_threshold_steps[i] = 0        # reset collision counter
+                    
                     # 2) Find next goal position on the map from map and goal category
-                    goal_grid_loc = ((object_maps[i,:,:,1]-1)==batch[i]['multiobjectgoal']).nonzero(as_tuple=False).squeeze(0)
+                    goal_grid_loc = ((object_maps[i, :, :, 1] - self.config.TASK_CONFIG.TASK.OBJECT_MAP_SENSOR.object_ind_offset)==next_goal_category[i].item()).nonzero(as_tuple=False)
+                    
+                    # 2.i) If the goal is not visible, then the agent explores
+                    if len(goal_grid_loc) == 0:
+                        # get agent location on the map
+                        agent_grid_loc = object_maps[i, :, :, 2].nonzero(as_tuple=False)
+                        if len(agent_grid_loc) > 0:
+                            agent_grid_loc = agent_grid_loc[0]
+                        
+                        if self.config.RL.POLICY.EXPLORATION_STRATEGY == "stubborn":
+                            # Stubborn Exploration strategy
+                            # https://github.com/Improbable-AI/Stubborn
+                            if self.config.RL.POLICY.USE_LOCAL_MAP_FOR_STUBBORN:
+                                local_size = self.config.RL.POLICY.local_map_size
+                                
+                                if len(stubborn_goal_queues[i]) == 0:
+                                    stubborn_goal_queues[i].append(1)
+                                    stubborn_goal_queues[i].append(2)
+                                    stubborn_goal_queues[i].append(3)
+                                    stubborn_goal_queues[i].append(4)
+                                    
+                                _goal_dir = stubborn_goal_queues[i].pop(0)
+                                if _goal_dir == 1:
+                                    goal_grid_loc = torch.tensor([min(agent_grid_loc[0]+local_size,oracle_map_size[i][0][0]), min(agent_grid_loc[1]+local_size, oracle_map_size[i][0][1])], device=self.device)
+                                elif _goal_dir == 2:
+                                    goal_grid_loc = torch.tensor([min(agent_grid_loc[0]+local_size, oracle_map_size[i][0][0]), max(agent_grid_loc[1]-local_size, 0)], device=self.device)
+                                elif _goal_dir == 3:
+                                    goal_grid_loc = torch.tensor([max(agent_grid_loc[0]-local_size, 0), max(agent_grid_loc[1]-local_size, 0)], device=self.device)
+                                else:
+                                    goal_grid_loc = torch.tensor([max(agent_grid_loc[0]-local_size, 0), min(agent_grid_loc[1]+local_size, oracle_map_size[i][0][1])], device=self.device)
+                                    
+                                stubborn_goal_queues[i].append(_goal_dir)
+                            else: 
+                                if len(stubborn_goal_queues[i]) == 0:
+                                    local_w, local_h = oracle_map_size[i][0]
+                                    stubborn_goal_queues[i].append(torch.tensor([local_w, local_h], device=self.device))
+                                    stubborn_goal_queues[i].append(torch.tensor([local_w, 0], device=self.device))
+                                    stubborn_goal_queues[i].append(torch.tensor([0, 0], device=self.device))
+                                    stubborn_goal_queues[i].append(torch.tensor([0, local_h], device=self.device))
+
+                                _goal = stubborn_goal_queues[i].pop(0)
+                                goal_grid_loc = _goal
+                                stubborn_goal_queues[i].append(_goal)
+                            
+                        else:
+                            # Random Exploration Strategy: selecting a random location around the agent
+                            explore_radius = self.config.RL.POLICY.EXPLORE_RADIUS
+                            
+                            # sample a point around agent
+                            goal_grid_loc = torch.tensor([
+                                        random.randint(max(0, agent_grid_loc[0]-explore_radius), min(oracle_map_size[i][0][0], agent_grid_loc[0]+explore_radius)),
+                                        random.randint(max(0, agent_grid_loc[1]-explore_radius), min(oracle_map_size[i][0][1], agent_grid_loc[1]+explore_radius))],
+                                        device=self.device)
+                        
+                        is_goal[i] = 0
+                        
+                    else:
+                        is_goal[i] = 1
+                        goal_grid_loc = goal_grid_loc[0]  # select any one match
+                    
                     
                     # 3) Convert map position to world position in 3D
-                    oracle_map_size = batch[i]["oracle_map_size"]
                     goal_world_coordinates[i] = multion_maps.from_grid(goal_grid_loc,
-                                                            grid_resolution=oracle_map_size[0],
-                                                            lower_bound=oracle_map_size[1],
-                                                            upper_bound=oracle_map_size[2])
+                                                            grid_resolution=oracle_map_size[i][0],
+                                                            lower_bound=oracle_map_size[i][1],
+                                                            upper_bound=oracle_map_size[i][2])
                     
+                # Mark the sampled goal on the map for visualization    
+                object_maps[i, 
+                            int(max(0, goal_grid_loc[0]-self.config.TASK_CONFIG.TASK.OBJECT_MAP_SENSOR.object_padding)): int(min(oracle_map_size[i][0][0], goal_grid_loc[0]+self.config.TASK_CONFIG.TASK.OBJECT_MAP_SENSOR.object_padding)), 
+                            int(max(0, goal_grid_loc[1]-self.config.TASK_CONFIG.TASK.OBJECT_MAP_SENSOR.object_padding)): int(min(oracle_map_size[i][0][1], goal_grid_loc[1]+self.config.TASK_CONFIG.TASK.OBJECT_MAP_SENSOR.object_padding)), 
+                            3] = 11  # num of objects=8, agent marked as 10
+                if is_goal[i] == 0:
+                    steps_towards_short_term_goal[i] += 1
+                
                 # 4) Convert 3D world positions to polar coordinates
                 agent_position = batch[i]["agent_position"]
                 agent_rotation = batch[i]["agent_rotation"]
@@ -1150,13 +1264,7 @@ class HierOnTrainer(BaseRLTrainer):
             # in the subprocesses.
             # For backwards compatibility, we also call .item() to convert to
             # an int
-            if actions[0].shape[0] > 1:
-                step_data = [
-                    action_array_to_dict(self.policy_action_space, a)
-                    for a in actions.to(device="cpu")
-                ]
-            else:
-                step_data = [a.item() for a in actions.to(device="cpu")]
+            step_data = [{"action": a.item(), "action_args": {"is_goal": is_goal[i].item()}} for i,a in enumerate(actions.to(device="cpu"))]
 
             outputs = self.envs.step(step_data)
 
@@ -1211,12 +1319,13 @@ class HierOnTrainer(BaseRLTrainer):
                     if len(self.config.VIDEO_OPTION) > 0:
                         frame = observations_to_image(
                                 observation=observations[i], info=infos[i], action=actions[i].cpu().numpy(),
-                                object_map=object_maps[i]
+                                object_map=object_maps[i], config=self.config
                         )
                         if self.config.VIDEO_RENDER_ALL_INFO:
                             _m = self._extract_scalars_from_info(infos[i])
                             _m["reward"] = current_episode_reward[i].item()
-                            _m["next_goal"] = multion_maps.MULTION_CYL_OBJECT_MAP[observations[i]['multiobjectgoal'][0]]
+                            _m["next_goal"] = multion_maps.MULTION_CYL_OBJECT_MAP[next_goal_category[i].item()]
+                            _m["collision_count"] = infos[i]["collisions"]["count"]
                             frame = overlay_frame(frame, _m)
 
                         rgb_frames[i].append(frame)
@@ -1234,27 +1343,51 @@ class HierOnTrainer(BaseRLTrainer):
                         )
 
                         rgb_frames[i] = []
+                    
+                    global_object_map[i] = torch.zeros(
+                        self.config.RL.POLICY.global_map_size,
+                        self.config.RL.POLICY.global_map_size,
+                        device=self.device,
+                        dtype=torch.float,
+                    )
+                    stubborn_goal_queues[i] = []
 
                 # episode continues
                 else:
                     if len(self.config.VIDEO_OPTION) > 0:
                         frame = observations_to_image(
                                 observation=observations[i], info=infos[i], action=actions[i].cpu().numpy(),
-                                object_map=object_maps[i]
+                                object_map=object_maps[i], config=self.config
                         )
                         if self.config.VIDEO_RENDER_ALL_INFO:
                             _m = self._extract_scalars_from_info(infos[i])
                             _m["reward"] = current_episode_reward[i].item()
-                            _m["next_goal"] = multion_maps.MULTION_CYL_OBJECT_MAP[observations[i]['multiobjectgoal'][0]]
+                            _m["next_goal"] = multion_maps.MULTION_CYL_OBJECT_MAP[next_goal_category[i].item()]
+                            _m["collision_count"] = infos[i]["collisions"]["count"]
                             frame = overlay_frame(frame, _m)
 
                         rgb_frames[i].append(frame)
 
-                    if actions[i].item() == 0 and infos[i]["sub_success"] == 1:
+                    if infos[i]["collisions"]["is_collision"]:
+                        collision_threshold_steps[i] += 1
+                    else:
+                        collision_threshold_steps[i] = 0
+
+                    if ((actions[i].item() == 0 and infos[i]["sub_success"] == 1) or
+                            ((self.config.RL.POLICY.EXPLORATION_STRATEGY == "" or self.config.RL.POLICY.EXPLORATION_STRATEGY == "random") 
+                                and steps_towards_short_term_goal[i].item() >= self.config.RL.POLICY.MAX_STEPS_BEFORE_GOAL_SELECTION) or
+                            (self.config.RL.POLICY.EXPLORATION_STRATEGY == "stubborn" and infos[i]["collisions"]["is_collision"] and
+                                collision_threshold_steps[i] > self.config.RL.POLICY.collision_threshold)):
+                        
                         test_recurrent_hidden_states[i] = torch.zeros(
                             self.actor_critic.num_recurrent_layers,
                             ppo_cfg.hidden_size,
                             device=self.device,
+                        )
+                        prev_actions[i] = torch.zeros(
+                            *action_shape,
+                            device=self.device,
+                            dtype=torch.long if discrete_actions else torch.float,
                         )
 
             not_done_masks = not_done_masks.to(device=self.device)
@@ -1266,7 +1399,8 @@ class HierOnTrainer(BaseRLTrainer):
                 prev_actions,
                 batch,
                 rgb_frames,
-                goal_observations
+                goal_observations,
+                global_object_map,
             ) = self._pause_envs(
                 envs_to_pause,
                 self.envs,
@@ -1276,7 +1410,8 @@ class HierOnTrainer(BaseRLTrainer):
                 prev_actions,
                 batch,
                 rgb_frames,
-                goal_observations
+                goal_observations,
+                global_object_map,
             )
 
         num_episodes = len(stats_episodes)
@@ -1304,3 +1439,34 @@ class HierOnTrainer(BaseRLTrainer):
             writer.add_scalar(f"eval_metrics/{k}", v, step_id)
 
         self.envs.close()
+
+    def build_semantic_map(self):
+        sem_object_map = np.zeros((self.config.RL.SEM_MAP_POLICY.map_size, 
+                                   self.config.RL.SEM_MAP_POLICY.map_size, 
+                                   self.config.RL.SEM_MAP_POLICY.map_channels))
+        
+        egocentric_map_size = self.config.RL.SEM_MAP_POLICY.map_size
+        global_map_size = self.config.RL.SEM_MAP_POLICY.global_map_size
+        coordinate_min = self.config.RL.SEM_MAP_POLICY.coordinate_min
+        coordinate_max = self.config.RL.SEM_MAP_POLICY.coordinate_max
+        
+        agent_loc = to_grid(
+            map_config.coordinate_min,
+            map_config.coordinate_max,
+            map_config.global_map_size,
+            observations[i]['gps']
+        )
+        projection = draw_projection(observations[i]['semantic'], observations[i]['depth'] * 10, egocentric_map_size, global_map_size, coordinate_min, coordinate_max)
+        projection = projection.squeeze(0).squeeze(0).permute(1, 2, 0)
+
+        projection = rotate_tensor(projection.permute(2, 0, 1).unsqueeze(0), torch.tensor(-(observations[i]["compass"])).unsqueeze(0))
+        projection = projection.squeeze(0).permute(1, 2, 0)
+        
+        sem_object_map[:projection.shape[0], :projection.shape[1], 1] = projection
+        
+        # Mark the agent location
+        object_map[max(0, agent_loc[0]-self.object_padding):min(top_down_map.shape[0], agent_loc[0]+self.object_padding),
+                    max(0, agent_loc[1]-self.object_padding):min(top_down_map.shape[1], agent_loc[1]+self.object_padding),
+                    self.channel_num+1] = 10 #len(kwargs['task'].object_to_datset_mapping) + self.object_ind_offset
+        
+        return projection

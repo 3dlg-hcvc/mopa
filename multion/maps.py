@@ -25,15 +25,26 @@ MULTION_CYL_OBJECT_CATEGORY = {'cylinder_red':0, 'cylinder_green':1, 'cylinder_b
 MULTION_CYL_OBJECT_MAP = {0: 'cylinder_red', 1: 'cylinder_green', 2: 'cylinder_blue', 3: 'cylinder_yellow', 
                             4: 'cylinder_white', 5:'cylinder_pink', 6: 'cylinder_black', 7: 'cylinder_cyan'}
 MULTION_TOP_DOWN_MAP_START = 20
-maps.TOP_DOWN_MAP_COLORS[MULTION_TOP_DOWN_MAP_START-1] = [150, 150, 150]
-maps.TOP_DOWN_MAP_COLORS[MULTION_TOP_DOWN_MAP_START-2] = [250, 250, 250]
+OBJECT_MAP_COLORS = np.full((100, 3), 150, dtype=np.uint8)
+OBJECT_MAP_COLORS[0] = [50, 50, 50]
+OBJECT_MAP_COLORS[1] = [150, 150, 150]
+OBJECT_MAP_COLORS[2:10] = np.array(
+    [[200, 0, 0], [0, 200, 0], [0, 0, 200], 
+    [255, 255, 0], [250, 250, 250], [250, 45, 185], 
+    [0, 0, 0], [0,255,255]], 
+    dtype=np.uint8
+)
+OBJECT_MAP_COLORS[10] = [255,165,0]   # Agent location
+OBJECT_MAP_COLORS[11] = [143, 0, 255]   # Sampled Goal location
+
 maps.TOP_DOWN_MAP_COLORS[MULTION_TOP_DOWN_MAP_START:MULTION_TOP_DOWN_MAP_START+8] = np.array(
     [[200, 0, 0], [0, 200, 0], [0, 0, 200], 
     [255, 255, 0], [250, 250, 250], [250, 45, 185], 
     [0, 0, 0], [0,255,255]], 
     dtype=np.uint8
 )
-maps.TOP_DOWN_MAP_COLORS[MULTION_TOP_DOWN_MAP_START+8] = [255,165,0]   # Agent location
+# maps.TOP_DOWN_MAP_COLORS[MULTION_TOP_DOWN_MAP_START+8] = [255,165,0]   # Agent location
+# maps.TOP_DOWN_MAP_COLORS[MULTION_TOP_DOWN_MAP_START+9] = [143, 0, 255]   # Sampled Goal location
 
 
 def get_topdown_map(

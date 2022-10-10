@@ -70,6 +70,8 @@ class MultiObjNavRLEnv(habitat.RLEnv):
         return observations
 
     def step(self, action: Union[int, str, Dict[str, Any]], **kwargs):
+        is_goal = kwargs["action_args"]["is_goal"]
+        
         # Support simpler interface as well
         if isinstance(action, (str, int, np.integer)):
             self.task.is_found_called = bool(action == 0)
@@ -78,6 +80,11 @@ class MultiObjNavRLEnv(habitat.RLEnv):
             self.task.is_found_called = bool(action["action"] == 0)
         
         observations = self._env.step(action, **kwargs)
+        
+        # Check if it was a goal
+        # If not, mark as not found
+        if self.task.is_found_called == True and bool(is_goal == 0):
+            self.task.is_found_called = False
         
         ##Terminates episode if wrong found is called
         if self.task.is_found_called == True and \
