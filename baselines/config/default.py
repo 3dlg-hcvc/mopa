@@ -161,6 +161,7 @@ _C.RL.POLICY.local_map_size = 15
 _C.RL.POLICY.USE_LOCAL_MAP_FOR_STUBBORN = True
 _C.RL.POLICY.collision_threshold = 0
 _C.RL.POLICY.check_goal_freq = 10
+_C.RL.POLICY.has_rgb = True
 # -----------------------------------------------------------------------------
 # OBS_TRANSFORMS CONFIG
 # -----------------------------------------------------------------------------

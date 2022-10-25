@@ -65,6 +65,9 @@ class PointNavResNetPolicy(HierNetPolicy):
             discrete_actions = True
             self.action_distribution_type = "categorical"
 
+        if "has_rgb" in policy_config and policy_config.has_rgb:
+            del observation_space.spaces['rgb']
+
         super().__init__(
             PointNavResNetNet(
                 observation_space=observation_space,
@@ -431,18 +434,23 @@ class PointNavResNetNet(Net):
             )
             x.append(fuse_states)
 
-        # Polar Dimensionality 2
-        # 2D polar transform
-        goal_observations = torch.stack(
-            [
-                goal_observations[:, 0],
-                torch.cos(-goal_observations[:, 1]),
-                torch.sin(-goal_observations[:, 1]),
-            ],
-            -1,
-        )
+        if IntegratedPointGoalGPSAndCompassSensor.cls_uuid in observations:
+            # Polar Dimensionality 2
+            # 2D polar transform
+            goal_observations = torch.stack(
+                [
+                    goal_observations[:, 0],
+                    torch.cos(-goal_observations[:, 1]),
+                    torch.sin(-goal_observations[:, 1]),
+                ],
+                -1,
+            )
 
-        x.append(self.tgt_embeding(goal_observations))
+            x.append(self.tgt_embeding(goal_observations))
+        
+        if PointGoalSensor.cls_uuid in observations:
+            #goal_observations = observations[PointGoalSensor.cls_uuid]
+            x.append(self.pointgoal_embedding(goal_observations))
 
         if self.discrete_actions:
             prev_actions = prev_actions.squeeze(-1)
