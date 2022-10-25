@@ -10,7 +10,7 @@ import torch
 import numpy as np
 from habitat.utils.visualizations import maps
 from habitat.tasks.utils import cartesian_to_polar
-from habitat.utils.geometry_utils import quaternion_rotate_vector
+from habitat.utils.geometry_utils import quaternion_rotate_vector, quaternion_from_coeff
 import quaternion
 
 try:
@@ -20,10 +20,14 @@ except ImportError:
 
 
 # Multion Objects
-MULTION_CYL_OBJECT_CATEGORY = {'cylinder_red':0, 'cylinder_green':1, 'cylinder_blue':2, 'cylinder_yellow':3, 
-                            'cylinder_white':4, 'cylinder_pink':5, 'cylinder_black':6, 'cylinder_cyan':7}
-MULTION_CYL_OBJECT_MAP = {0: 'cylinder_red', 1: 'cylinder_green', 2: 'cylinder_blue', 3: 'cylinder_yellow', 
-                            4: 'cylinder_white', 5:'cylinder_pink', 6: 'cylinder_black', 7: 'cylinder_cyan'}
+# MULTION_CYL_OBJECT_CATEGORY = {'cylinder_red':0, 'cylinder_green':1, 'cylinder_blue':2, 'cylinder_yellow':3, 
+#                             'cylinder_white':4, 'cylinder_pink':5, 'cylinder_black':6, 'cylinder_cyan':7}
+# MULTION_CYL_OBJECT_MAP = {0: 'cylinder_red', 1: 'cylinder_green', 2: 'cylinder_blue', 3: 'cylinder_yellow', 
+#                             4: 'cylinder_white', 5:'cylinder_pink', 6: 'cylinder_black', 7: 'cylinder_cyan'}
+MULTION_CYL_OBJECT_CATEGORY = {'cylinder_red':1, 'cylinder_green':2, 'cylinder_blue':3, 'cylinder_yellow':4, 
+                            'cylinder_white':5, 'cylinder_pink':6, 'cylinder_black':7, 'cylinder_cyan':8}
+MULTION_CYL_OBJECT_MAP = {1: 'cylinder_red', 2: 'cylinder_green', 3: 'cylinder_blue', 4: 'cylinder_yellow', 
+                            5: 'cylinder_white', 6:'cylinder_pink', 7: 'cylinder_black', 8: 'cylinder_cyan'}
 MULTION_TOP_DOWN_MAP_START = 20
 OBJECT_MAP_COLORS = np.full((100, 3), 150, dtype=np.uint8)
 OBJECT_MAP_COLORS[0] = [50, 50, 50]
@@ -37,7 +41,14 @@ OBJECT_MAP_COLORS[2:10] = np.array(
 OBJECT_MAP_COLORS[10] = [255,165,0]   # Agent location
 OBJECT_MAP_COLORS[11] = [143, 0, 255]   # Sampled Goal location
 
-maps.TOP_DOWN_MAP_COLORS[MULTION_TOP_DOWN_MAP_START:MULTION_TOP_DOWN_MAP_START+8] = np.array(
+OCC_MAP_COLORS = np.full((5, 3), 150, dtype=np.uint8)
+OCC_MAP_COLORS[0] = [150, 150, 150]  # not explored
+OCC_MAP_COLORS[1] = [250, 250, 250] # seen + empty
+OCC_MAP_COLORS[2] = [0, 0, 0] # seen + occupied
+
+maps.TOP_DOWN_MAP_COLORS[
+    MULTION_TOP_DOWN_MAP_START + min(MULTION_CYL_OBJECT_CATEGORY.values()):
+    MULTION_TOP_DOWN_MAP_START + max(MULTION_CYL_OBJECT_CATEGORY.values()) + 1] = np.array(
     [[200, 0, 0], [0, 200, 0], [0, 0, 200], 
     [255, 255, 0], [250, 250, 250], [250, 45, 185], 
     [0, 0, 0], [0,255,255]], 
@@ -118,29 +129,67 @@ def get_topdown_map_from_sim(
         nav_threshold
     )
 
+def to_grid(
+    realworld_locs,
+    meters_per_pixel=None,
+    grid_resolution=None,
+    lower_bound=None,
+    upper_bound=None,
+):
+    r"""Similar to habitat.utils.visualizations.maps.to_grid, 
+        but without _sim
+    """
+    if meters_per_pixel is None:
+        grid_size = torch.tensor(
+            [abs(upper_bound[2] - lower_bound[2]) / grid_resolution,
+            abs(upper_bound[0] - lower_bound[0]) / grid_resolution],
+        device=realworld_locs.device)
+    else:
+        grid_size = torch.tensor([meters_per_pixel, meters_per_pixel], device=realworld_locs.device)
+        
+    grid_locs = ((realworld_locs - torch.tensor(lower_bound, device=realworld_locs.device)) / grid_size).type(torch.LongTensor)
+    
+    return grid_locs
+
+
 def from_grid(
     grid_locs,
-    grid_resolution,
-    lower_bound,
-    upper_bound,
+    meters_per_pixel=None,
+    grid_resolution=None,
+    lower_bound=None,
+    upper_bound=None,
+    is_3d=True,
 ):
     r"""
         Similar to habitat.utils.visualizations.maps.from_grid, 
         but without _sim
     """
 
-    grid_size_x = abs(upper_bound[0] - lower_bound[0]) / grid_resolution[0]
-    grid_size_y = abs(upper_bound[1] - lower_bound[1]) / grid_resolution[1]
+    if meters_per_pixel is None:
+        grid_size_x = abs(upper_bound[0] - lower_bound[0]) / grid_resolution[0]
+        grid_size_y = abs(upper_bound[1] - lower_bound[1]) / grid_resolution[1]
+    else:
+        grid_size_x = grid_size_y = meters_per_pixel
     
     realworld_x = lower_bound[0] + grid_locs[0] * grid_size_x
     realworld_y = lower_bound[1] + grid_locs[1] * grid_size_y
-    realworld_coordinates = torch.stack([realworld_y, torch.zeros_like(realworld_x), realworld_x], axis=0)
     
-    return realworld_coordinates
+    if is_3d:
+        return torch.stack([realworld_y, torch.zeros_like(realworld_x), -realworld_x], axis=0)
+    
+    return torch.stack([realworld_x, realworld_y], axis=0)
 
 def compute_pointgoal(
         source_position, source_rotation, goal_position
     ):
+        if source_position.shape[0] == 2:
+            source_position = np.array(
+                [source_position[1], 0.0, -source_position[0]], dtype=np.float32
+            )
+        if goal_position.shape[0] == 2:
+            goal_position = np.array(
+                [goal_position[1], 0.0, -goal_position[0]], dtype=np.float32
+            )
         direction_vector = goal_position - source_position
         
         if not isinstance(source_rotation, quaternion.quaternion):
@@ -155,3 +204,28 @@ def compute_pointgoal(
         )
         return np.array([rho, -phi], dtype=np.float32)
     
+def to_global_map_grid(
+    episodic_locs,
+    agent_episodic_start=None,
+    agent_episodic_start_map=None,
+):
+    r"""Find out location on global map
+    """
+    
+    episodic_locs_map = (agent_episodic_start_map - agent_episodic_start + episodic_locs).type(torch.LongTensor)
+    
+    return episodic_locs_map
+
+def from_global_map_grid(
+    episodic_locs_map,
+    agent_episodic_start=None,
+    agent_episodic_start_map=None,
+):
+    r"""Find out episodic location
+    """
+    
+    episodic_locs = (episodic_locs_map - agent_episodic_start_map + agent_episodic_start).type(torch.LongTensor)
+    
+    episodic_locs_3d = torch.stack([episodic_locs[1], torch.zeros_like(episodic_locs[0]), -episodic_locs[0]], axis=0)
+    
+    return episodic_locs_3d

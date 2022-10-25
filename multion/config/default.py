@@ -146,6 +146,11 @@ _C.TASK.GPS_SENSOR.DIMENSIONALITY = 2
 _C.TASK.ROTATION_SENSOR = CN()
 _C.TASK.ROTATION_SENSOR.TYPE = "RotationSensor"
 # -----------------------------------------------------------------------------
+# AGENT EPISODIC ROTATION SENSOR
+# -----------------------------------------------------------------------------
+_C.TASK.EPISODIC_ROTATION_SENSOR = CN()
+_C.TASK.EPISODIC_ROTATION_SENSOR.TYPE = "EpisodicRotationSensor"
+# -----------------------------------------------------------------------------
 # PROXIMITY SENSOR
 # -----------------------------------------------------------------------------
 _C.TASK.PROXIMITY_SENSOR = CN()

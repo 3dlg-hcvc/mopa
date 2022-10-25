@@ -88,6 +88,7 @@ class MultiObjectNavDatasetV1(PointNavDatasetV1):
             self.category_to_task_category_id = deserialized[
                 "category_to_task_category_id"
             ]
+            self.category_to_task_category_id = {k: v+1 for k, v in self.category_to_task_category_id.items()}
 
         if len(deserialized["episodes"]) == 0:
             return
@@ -121,6 +122,7 @@ class MultiObjectNavigationTask(NavigationTask):
     ) -> None:
         super().__init__(config=config, sim=sim, dataset=dataset)
         self.current_goal_index=0
+        self.object_to_datset_mapping = dataset.category_to_task_category_id
 
     def reset(self, episode: MultiObjectGoalNavEpisode):
         rigid_obj_mgr = self._sim.get_rigid_object_manager()
@@ -132,13 +134,8 @@ class MultiObjectNavigationTask(NavigationTask):
         obj_type = self._config.OBJECTS_TYPE
         if obj_type == "CYL":
             obj_path = self._config.CYL_OBJECTS_PATH
-            self.object_to_datset_mapping = {'cylinder_red':0, 'cylinder_green':1, 'cylinder_blue':2, 
-                                             'cylinder_yellow':3, 'cylinder_white':4, 'cylinder_pink':5, 
-                                             'cylinder_black':6, 'cylinder_cyan':7}
         else:
             obj_path = self._config.REAL_OBJECTS_PATH
-            self.object_to_datset_mapping = {'guitar':0, 'electric_piano':1, 'basket_ball':2,'toy_train':3, 
-                                             'teddy_bear':4, 'rocking_horse':5, 'backpack': 6, 'trolley_bag':7}
             
         obj_templates_mgr = self._sim.get_object_template_manager()
         obj_templates_mgr.load_configs(obj_path, True)

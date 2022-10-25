@@ -1,5 +1,5 @@
 import os
-from typing import Any, Optional
+from typing import Any, Optional, Union, Dict
 
 import pickle
 import numpy as np
@@ -9,6 +9,7 @@ from habitat.config import Config
 from habitat.core.registry import registry
 from habitat.core.simulator import Sensor, SensorTypes, Simulator
 from habitat.tasks.nav.nav import HeadingSensor, PointGoalSensor
+from habitat.core.simulator import SemanticSensor
 from habitat.core.dataset import Dataset
 from habitat.utils.geometry_utils import (
     quaternion_from_coeff,
@@ -199,9 +200,50 @@ class EpisodicCompassSensor(Sensor):
             rotation_world_agent.inverse() * rotation_world_start
         )
         
+@registry.register_sensor(name="EpisodicRotationSensor")
+class EpisodicRotationSensor(Sensor):
+    r"""The agents rotation quat in the coordinate frame defined by the epiosde,
+    theta=0 is defined by the agents state at t=0
+    """
+    cls_uuid: str = "episodic_rotation"
+    def __init__(
+        self, sim: Simulator, config: Config, *args: Any, **kwargs: Any
+    ):
+        self._sim = sim
+        super().__init__(config=config)
+
+    def _get_sensor_type(self, *args: Any, **kwargs: Any):
+        return SensorTypes.HEADING
+    
+    def _get_uuid(self, *args: Any, **kwargs: Any):
+        return self.cls_uuid
+    
+    def _get_observation_space(self, *args: Any, **kwargs: Any):
+        return spaces.Box(low=-np.pi, high=np.pi, shape=(1,), dtype=np.float32)
+    
+    def _quat_to_xy_heading(self, quat):
+        direction_vector = np.array([0, 0, -1])
+
+        heading_vector = quaternion_rotate_vector(quat, direction_vector)
+
+        phi = cartesian_to_polar(-heading_vector[2], heading_vector[0])[1]
+        return np.array([phi], dtype=np.float32)
+
+    def get_observation(
+        self, *args: Any, observations, episode, **kwargs: Any
+    ):
+        agent_state = self._sim.get_agent_state()
+        rotation_world_agent = agent_state.rotation
+        rotation_world_start = quaternion_from_coeff(episode.start_rotation)
+
+        return quaternion.as_float_array(
+            rotation_world_agent.inverse() * rotation_world_start
+        )
+        
 @registry.register_sensor(name="RotationSensor")
 class RotationSensor(Sensor):
-    r"""The agent's world rotation
+    r"""The agent's episodic rotation as quaternion
+        -   similar to CompassSensor
     """
     cls_uuid: str = "agent_rotation"
     def __init__(self, sim, config, **kwargs: Any):

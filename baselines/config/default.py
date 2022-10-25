@@ -160,6 +160,7 @@ _C.RL.POLICY.MAX_STEPS_BEFORE_GOAL_SELECTION = 10
 _C.RL.POLICY.local_map_size = 15
 _C.RL.POLICY.USE_LOCAL_MAP_FOR_STUBBORN = True
 _C.RL.POLICY.collision_threshold = 0
+_C.RL.POLICY.check_goal_freq = 10
 # -----------------------------------------------------------------------------
 # OBS_TRANSFORMS CONFIG
 # -----------------------------------------------------------------------------
@@ -214,6 +215,9 @@ _C.RL.SEM_MAP_POLICY.use_oracle_map = False
 _C.RL.SEM_MAP_POLICY.global_map_size = 150
 _C.RL.SEM_MAP_POLICY.coordinate_min = -62.3241
 _C.RL.SEM_MAP_POLICY.coordinate_max = 90.0399
+_C.RL.SEM_MAP_POLICY.meters_per_pixel = 0.3
+_C.RL.SEM_MAP_POLICY.object_padding = 2
+_C.RL.SEM_MAP_POLICY.object_ind_offset = 2
 # -----------------------------------------------------------------------------
 # DECENTRALIZED DISTRIBUTED PROXIMAL POLICY OPTIMIZATION (DD-PPO)
 # -----------------------------------------------------------------------------

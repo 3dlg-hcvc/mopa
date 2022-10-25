@@ -21,9 +21,19 @@ from habitat.core.logging import logger
 from habitat.core.utils import try_cv2_import
 from habitat.utils.visualizations import maps
 from multion import maps as multion_maps
+import matplotlib.pyplot as plt
+from matplotlib import colors
+import matplotlib
 
 cv2 = try_cv2_import()
 
+def subplot(plt, Y_X, sz_y_sz_x = (10, 10)):
+    Y,X = Y_X
+    sz_y, sz_x = sz_y_sz_x
+    plt.rcParams['figure.figsize'] = (X*sz_x, Y*sz_y)
+    fig, axes = plt.subplots(Y, X)
+    plt.subplots_adjust(wspace=0.1, hspace=0.1)
+    return fig, axes
 
 def paste_overlapping_image(
     background: np.ndarray,
@@ -193,8 +203,8 @@ def draw_found(view: np.ndarray, alpha: float = 1) -> np.ndarray:
 def observations_to_image(observation: Dict, projected_features: np.ndarray=None, 
         egocentric_projection: np.ndarray=None, global_map: np.ndarray=None, 
         info: Dict=None, action: np.ndarray=None, object_map: np.ndarray=None,
-        config: np.ndarray=None) -> np.ndarray:
-# def observations_to_image(observation: Dict, info: Dict, action: np.ndarray) -> np.ndarray:
+        semantic_projections: np.ndarray=None, global_object_map: np.ndarray=None, 
+        agent_view: np.ndarray=None, config: np.ndarray=None) -> np.ndarray:
     r"""Generate image of single frame from observation and info
     returned from a single environment step().
 
@@ -225,6 +235,47 @@ def observations_to_image(observation: Dict, projected_features: np.ndarray=None
         depth_map = depth_map.astype(np.uint8)
         depth_map = np.stack([depth_map for _ in range(3)], axis=2)
         egocentric_view.append(depth_map)
+        
+    # draw semantic map if observation has depth info
+    if "semantic" in observation:
+        observation_size = observation["semantic"].shape[0]
+        semantic_map = observation["semantic"].squeeze()
+        if not isinstance(semantic_map, np.ndarray):
+            semantic_map = semantic_map.cpu().numpy()
+
+        semantic_map = (semantic_map + 1).astype(np.uint8)
+
+        semantic_map = multion_maps.OBJECT_MAP_COLORS[semantic_map]
+        egocentric_view.append(semantic_map)
+    
+    if info is not None and "top_down_map" in info and info["top_down_map"] is not None:
+        top_down_map = info["top_down_map"]["map"]
+        top_down_map = maps.colorize_topdown_map(
+            top_down_map, info["top_down_map"]["fog_of_war_mask"]
+        )
+        map_agent_pos = info["top_down_map"]["agent_map_coord"]
+        top_down_map = maps.draw_agent(
+            image=top_down_map,
+            agent_center_coord=map_agent_pos,
+            agent_rotation=info["top_down_map"]["agent_angle"],
+            agent_radius_px=top_down_map.shape[0] // 16,
+        )
+
+        if top_down_map.shape[0] > top_down_map.shape[1]:
+            top_down_map = np.rot90(top_down_map, 1)
+
+        # scale top down map to align with rgb view
+        old_h, old_w, _ = top_down_map.shape
+        top_down_height = observation_size
+        top_down_width = int(float(top_down_height) / old_h * old_w)
+        # cv2 resize (dsize is width first)
+        top_down_map = cv2.resize(
+            top_down_map,
+            (top_down_width, top_down_height),
+            interpolation=cv2.INTER_CUBIC,
+        )
+        egocentric_view.append(top_down_map)
+        #frame = np.concatenate((frame, top_down_map), axis=1)
     
     if projected_features is not None and len(projected_features)>0:
         projected_features = cv2.resize(
@@ -235,6 +286,20 @@ def observations_to_image(observation: Dict, projected_features: np.ndarray=None
         # projected_features /= np.max(projected_features)
         # projected_features  = cv2.applyColorMap(np.uint8(255 * projected_features), cv2.COLORMAP_JET)
         egocentric_view.append(projected_features)
+        
+    if semantic_projections is not None and len(semantic_projections)>0:
+        if not isinstance(semantic_projections, np.ndarray):
+            semantic_projections = semantic_projections.cpu().numpy()
+        semantic_projections = semantic_projections + 1
+        semantic_projections = (semantic_projections).astype(np.uint8)
+        semantic_projections = cv2.resize(
+            semantic_projections,
+            depth_map.shape[:2],
+            interpolation=cv2.INTER_NEAREST,
+        )
+        semantic_projections = multion_maps.OBJECT_MAP_COLORS[semantic_projections]
+        #semantic_projections  = cv2.applyColorMap(np.uint8(255 * semantic_projections), cv2.COLORMAP_JET)
+        egocentric_view.append(semantic_projections)
 
     if egocentric_projection is not None and len(egocentric_projection)>0:
         if not isinstance(egocentric_projection, np.ndarray):
@@ -314,161 +379,116 @@ def observations_to_image(observation: Dict, projected_features: np.ndarray=None
         )
         frame = np.concatenate((frame, goal_map), axis=1)
         
-    if object_map is not None:
-        # Overlay object map on occupancy map
-        if not isinstance(object_map, np.ndarray):
-            object_map = object_map.cpu().numpy()
-        object_map = (object_map[:,:,1:].max(axis=-1)).astype(np.uint8)
-        object_map = multion_maps.OBJECT_MAP_COLORS[object_map]
+    if agent_view is not None:
+        if not isinstance(agent_view, np.ndarray):
+            agent_view = agent_view.cpu().numpy()
+        agent_view[:,:,1] = agent_view[:,:,1] + 1
+        agent_view = (agent_view[:,:,1:].max(axis=-1)).astype(np.uint8)
+        agent_view = multion_maps.OBJECT_MAP_COLORS[agent_view]
         
         # scale map to align with rgb view
-        old_h, old_w, _ = object_map.shape
+        old_h, old_w, _ = agent_view.shape
         _height = observation_size
         _width = int(float(_height) / old_h * old_w)
         # cv2 resize (dsize is width first)
-        object_map = cv2.resize(
-            object_map,
+        agent_view = cv2.resize(
+            agent_view,
             (_width, _height),
             interpolation=cv2.INTER_CUBIC,
         )
-        frame = np.concatenate((frame, object_map), axis=1)
-
-    if info is not None and "top_down_map" in info and info["top_down_map"] is not None:
-        top_down_map = info["top_down_map"]["map"]
-        top_down_map = maps.colorize_topdown_map(
-            top_down_map, info["top_down_map"]["fog_of_war_mask"]
-        )
-        map_agent_pos = info["top_down_map"]["agent_map_coord"]
-        top_down_map = maps.draw_agent(
-            image=top_down_map,
-            agent_center_coord=map_agent_pos,
-            agent_rotation=info["top_down_map"]["agent_angle"],
-            agent_radius_px=top_down_map.shape[0] // 16,
-        )
-
-        if top_down_map.shape[0] > top_down_map.shape[1]:
-            top_down_map = np.rot90(top_down_map, 1)
-
-        # scale top down map to align with rgb view
-        old_h, old_w, _ = top_down_map.shape
-        top_down_height = observation_size
-        top_down_width = int(float(top_down_height) / old_h * old_w)
+        frame = np.concatenate((frame, agent_view), axis=1)
+        
+    if object_map is not None:
+        if not isinstance(object_map, np.ndarray):
+            object_map = object_map.cpu().numpy()
+            
+        # objects
+        object_map[:,:,1] = object_map[:,:,1] + 1
+        obj_map = (object_map[:,:,1:].max(axis=-1)).astype(np.uint8)
+        obj_map = multion_maps.OBJECT_MAP_COLORS[obj_map]
+        
+        # scale map to align with rgb view
+        old_h, old_w, _ = obj_map.shape
+        _height = observation_size
+        _width = int(float(_height) / old_h * old_w)
         # cv2 resize (dsize is width first)
-        top_down_map = cv2.resize(
-            top_down_map,
-            (top_down_width, top_down_height),
+        obj_map = cv2.resize(
+            obj_map,
+            (_width, _height),
             interpolation=cv2.INTER_CUBIC,
         )
-        frame = np.concatenate((frame, top_down_map), axis=1)
+        frame = np.concatenate((frame, obj_map), axis=1)
+        
+        # occupancy
+        occ_map = (np.maximum(object_map[:,:,0],object_map[:,:,2])).astype(np.uint8) #object_map[:,:,0].astype(np.uint8)
+        #occ_map = multion_maps.OCC_MAP_COLORS[occ_map]
+        occ_map = multion_maps.OBJECT_MAP_COLORS[occ_map]
+        
+        # cv2 resize (dsize is width first)
+        occ_map = cv2.resize(
+            occ_map,
+            (_width, _height),
+            interpolation=cv2.INTER_CUBIC,
+        )
+        frame = np.concatenate((frame, occ_map), axis=1)
+        
+    if global_object_map is not None:
+        if not isinstance(global_object_map, np.ndarray):
+            global_object_map = global_object_map.cpu().numpy()
+        global_object_map = global_object_map + 1
+        global_object_map = (global_object_map[:,:,1:].max(axis=-1)).astype(np.uint8)
+        global_object_map = multion_maps.OBJECT_MAP_COLORS[global_object_map]
+        
+        # scale map to align with rgb view
+        old_h, old_w, _ = global_object_map.shape
+        _height = observation_size
+        _width = int(float(_height) / old_h * old_w)
+        # cv2 resize (dsize is width first)
+        global_object_map = cv2.resize(
+            global_object_map,
+            (_width, _height),
+            interpolation=cv2.INTER_CUBIC,
+        )
+        frame = np.concatenate((frame, global_object_map), axis=1)
+        
+
     return frame
 
+def save_map_image(grid_map, depth, semantic,
+                   all_agent_marks_x=None,
+                   all_agent_marks_y=None,
+                   agent_location_x=None,
+                   agent_location_y=None,
+                   file_name="") -> np.ndarray:
+    r"""Generate image of single frame from observation and info
+    returned from a single environment step().
 
-def to_grid(coordinate_min, coordinate_max, global_map_size, position):
-    grid_size = (coordinate_max - coordinate_min) / global_map_size
-    grid_x = ((coordinate_max - position[0]) / grid_size).round()
-    grid_y = ((position[1] - coordinate_min) / grid_size).round()
-    return int(grid_x), int(grid_y)
+    Args:
+        observation: observation returned from an environment step().
+        info: info returned from an environment step().
+        action: action returned from an environment step().
 
-
-def draw_projection(image, depth, s, global_map_size, coordinate_min, coordinate_max):
-    image = torch.tensor(image).permute(2, 0, 1).unsqueeze(0)
-    depth = torch.tensor(depth).permute(2, 0, 1).unsqueeze(0)
-    spatial_locs, valid_inputs = _compute_spatial_locs(depth, s, global_map_size, coordinate_min, coordinate_max)
-    x_gp1 = _project_to_ground_plane(image, spatial_locs, valid_inputs, s)
+    Returns:
+        generated image of a single frame.
+    """
     
-    return x_gp1
-
-
-def _project_to_ground_plane(img_feats, spatial_locs, valid_inputs, s):
-    outh, outw = (s, s)
-    bs, f, HbyK, WbyK = img_feats.shape
-    device = img_feats.device
-    eps=-1e16
-    K = 1
-
-    # Sub-sample spatial_locs, valid_inputs according to img_feats resolution.
-    idxes_ss = ((torch.arange(0, HbyK, 1)*K).long().to(device), \
-                (torch.arange(0, WbyK, 1)*K).long().to(device))
-
-    spatial_locs_ss = spatial_locs[:, :, idxes_ss[0][:, None], idxes_ss[1]] # (bs, 2, HbyK, WbyK)
-    valid_inputs_ss = valid_inputs[:, :, idxes_ss[0][:, None], idxes_ss[1]] # (bs, 1, HbyK, WbyK)
-    valid_inputs_ss = valid_inputs_ss.squeeze(1) # (bs, HbyK, WbyK)
-    invalid_inputs_ss = ~valid_inputs_ss
-
-    # Filter out invalid spatial locations
-    invalid_spatial_locs = (spatial_locs_ss[:, 1] >= outh) | (spatial_locs_ss[:, 1] < 0 ) | \
-                        (spatial_locs_ss[:, 0] >= outw) | (spatial_locs_ss[:, 0] < 0 ) # (bs, H, W)
-
-    invalid_writes = invalid_spatial_locs | invalid_inputs_ss
-
-    # Set the idxes for all invalid locations to (0, 0)
-    spatial_locs_ss[:, 0][invalid_writes] = 0
-    spatial_locs_ss[:, 1][invalid_writes] = 0
-
-    # Weird hack to account for max-pooling negative feature values
-    invalid_writes_f = rearrange(invalid_writes, 'b h w -> b () h w').float()
-    img_feats_masked = img_feats * (1 - invalid_writes_f) + eps * invalid_writes_f
-    img_feats_masked = rearrange(img_feats_masked, 'b e h w -> b e (h w)')
-
-    # Linearize ground-plane indices (linear idx = y * W + x)
-    linear_locs_ss = spatial_locs_ss[:, 1] * outw + spatial_locs_ss[:, 0] # (bs, H, W)
-    linear_locs_ss = rearrange(linear_locs_ss, 'b h w -> b () (h w)')
-    linear_locs_ss = linear_locs_ss.expand(-1, f, -1) # .contiguous()
-
-    proj_feats, _ = torch_scatter.scatter_max(
-                        img_feats_masked,
-                        linear_locs_ss,
-                        dim=2,
-                        dim_size=outh*outw,
-                    )
-    proj_feats = rearrange(proj_feats, 'b e (h w) -> b e h w', h=outh)
-
-    # Replace invalid features with zeros
-    eps_mask = (proj_feats == eps).float()
-    proj_feats = proj_feats * (1 - eps_mask) + eps_mask * (proj_feats - eps)
-
-    return proj_feats
-
-
-def _compute_spatial_locs(depth_inputs, s, global_map_size, coordinate_min, coordinate_max):
-    bs, _, imh, imw = depth_inputs.shape
-    local_scale = float(coordinate_max - coordinate_min)/float(global_map_size)
-    cx, cy = 256./2., 256./2.
-    fx = fy =  (256. / 2.) / np.tan(np.deg2rad(79. / 2.))
-
-    #2D image coordinates
-    x    = rearrange(torch.arange(0, imw), 'w -> () () () w')
-    y    = rearrange(torch.arange(imh, 0, step=-1), 'h -> () () h ()')
-    xx   = (x - cx) / fx
-    yy   = (y - cy) / fy
-
-    # 3D real-world coordinates (in meters)
-    Z            = depth_inputs
-    X            = xx * Z
-    Y            = yy * Z
-    # valid_inputs = (depth_inputs != 0) & ((Y < 1) & (Y > -1))
-    valid_inputs = (depth_inputs != 0) & ((Y > -0.5) & (Y < 1))
-
-    # 2D ground projection coordinates (in meters)
-    # Note: map_scale - dimension of each grid in meters
-    # - depth/scale + (s-1)/2 since image convention is image y downward
-    # and agent is facing upwards.
-    x_gp            = ( (X / local_scale) + (s-1)/2).round().long() # (bs, 1, imh, imw)
-    y_gp            = (-(Z / local_scale) + (s-1)/2).round().long() # (bs, 1, imh, imw)
-
-    return torch.cat([x_gp, y_gp], dim=1), valid_inputs
-
-
-def rotate_tensor(x_gp, heading):
-    sin_t = torch.sin(heading.squeeze(1))
-    cos_t = torch.cos(heading.squeeze(1))
-    A = torch.zeros(x_gp.size(0), 2, 3)
-    A[:, 0, 0] = cos_t
-    A[:, 0, 1] = sin_t
-    A[:, 1, 0] = -sin_t
-    A[:, 1, 1] = cos_t
-
-    grid = F.affine_grid(A, x_gp.size())
-    rotated_x_gp = F.grid_sample(x_gp, grid)
-    return rotated_x_gp
-
+    fig, (ax0, ax1, ax2) = plt.subplots(1, 3)
+    fig.set_size_inches(13.5, 7)
+    fig.subplots_adjust(wspace=0, hspace=0)
+    
+    #cmap = colors.ListedColormap(multion_maps.OBJECT_MAP_COLORS/255.)
+    cmap = matplotlib.cm.get_cmap('Paired_r', 20)
+    ax2.imshow(grid_map, cmap=cmap) #, vmin=0, vmax=1)
+    #ax2.imshow(1-(grid_map), cmap='gray', vmin=0, vmax=1)
+    
+    ax0.imshow(depth, cmap='gray')
+    ax1.imshow(semantic, cmap='gray')
+    #ax2.plot(all_agent_marks_x, all_agent_marks_y, linestyle='-', color='green')
+    #ax2.scatter(agent_location_x, agent_location_y, marker='*', color='red')
+    ax0.axis('off')
+    ax1.axis('off')
+    ax2.axis('off')
+    
+    fig.savefig(os.path.join("test_maps", f"{file_name}.png"))
+    #plt.close('all')
+    
