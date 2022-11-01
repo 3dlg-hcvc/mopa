@@ -83,10 +83,10 @@ import baselines.common.depth_utils as du
 import baselines.common.rotation_utils as ru
 #from habitat.utils.visualizations import fog_of_war
 import baselines.common.fog_of_war as fog_of_war
-#from baselines.common.object_detector_cyl import ObjectDetector
+from baselines.common.object_detector_cyl import ObjectDetector
 
-@baseline_registry.register_trainer(name="semmapon")
-class SemMapOnTrainer(BaseRLTrainer):
+@baseline_registry.register_trainer(name="predsemmap")
+class PredSemMapOnTrainer(BaseRLTrainer):
     r"""Trainer class for predicted semantic map
     """
     supported_tasks = ["Nav-v0"]
@@ -968,7 +968,7 @@ class SemMapOnTrainer(BaseRLTrainer):
             grid_map,
             object_maps
         )
-        
+
     def _eval_checkpoint(
         self,
         checkpoint_path: str,
@@ -1174,7 +1174,7 @@ class SemMapOnTrainer(BaseRLTrainer):
                     self.config.RL.SEM_MAP_POLICY.coordinate_min], device=self.device)
         # 
         
-        #_detector = ObjectDetector()
+        self._detector = ObjectDetector()
         
         stats_episodes: Dict[
             Any, Any
@@ -1210,7 +1210,7 @@ class SemMapOnTrainer(BaseRLTrainer):
             next_goal_category = batch['multiobjectgoal']
             
             # 1) Get map with all objects
-            self.object_maps, agent_locs = self.build_map(batch, self.object_maps, self.grid_map)
+            self.object_maps, agent_locs, semantic = self.build_map(batch, self.object_maps, self.grid_map)
                 
             for i in range(self.envs.num_envs):
                 # mark agent
@@ -1294,7 +1294,7 @@ class SemMapOnTrainer(BaseRLTrainer):
                         
                     else:
                         is_goal[i] = 1
-                        goal_grid_loc = goal_grid_loc[0]  # select any one match
+                        goal_grid_loc = goal_grid_loc.float().mean(axis=0).type(torch.uint8)  # select one
                     
                     goal_grid[i] = goal_grid_loc
                     
@@ -1416,7 +1416,8 @@ class SemMapOnTrainer(BaseRLTrainer):
                     if len(self.config.VIDEO_OPTION) > 0:
                         frame = observations_to_image(
                                 observation=batch[i], info=infos[i], action=actions[i].cpu().numpy(),
-                                object_map=self.object_maps[i], 
+                                object_map=self.object_maps[i],
+                                predicted_semantic=semantic[i], 
                                 #semantic_projections=(self.map > 0), #projection[i], 
                                 #global_object_map=global_object_map[i], 
                                 #agent_view=agent_view[i],
@@ -1493,6 +1494,7 @@ class SemMapOnTrainer(BaseRLTrainer):
                         frame = observations_to_image(
                                 observation=observations[i], info=infos[i], action=actions[i].cpu().numpy(),
                                 object_map=self.object_maps[i], 
+                                predicted_semantic=semantic[i],
                                 #semantic_projections=(self.map > 0), #projection[i], 
                                 #global_object_map=global_object_map[i], 
                                 #agent_view=agent_view[i],
@@ -1595,18 +1597,26 @@ class SemMapOnTrainer(BaseRLTrainer):
         depth[depth == 0] = np.NaN
         #depth[depth > 10] = np.NaN
 
-        semantic = observations['semantic'].cpu().numpy()
+        gt_semantic = observations['semantic'].squeeze(-1).cpu().numpy()
         theta = observations['episodic_compass'].cpu().numpy()
         location = observations["episodic_gps"].cpu().numpy()
-        
-        #res = _detector.predict(observations['rgb'])
+        semantic = np.zeros_like(depth)
+        results = self._detector.predict(observations['rgb'].squeeze(-1))
+        for i, res in enumerate(results):
+            if len(res['boxes'])> 0:
+                gt_bbox = []
+                for j, b in enumerate(res['boxes']):
+                    b = np.round(b).astype(int)
+                    semantic[i, b[1]:b[3], b[0]:b[2]] = res["labels"][j] + 1  # object semantic labels start at 1
+                    
+        semantic = semantic[..., np.newaxis]
         
         coords = self._unproject_to_world(depth, location, theta)
         grid_map = self._add_to_map(coords, semantic, grid_map)
         _agent_locs = self.to_grid(location)
         object_maps[:, :, :, :2] = torch.tensor(grid_map)
         
-        return object_maps, _agent_locs
+        return object_maps, _agent_locs, semantic
     
     def _unproject_to_world(self, depth, location, theta):
         point_cloud = du.get_point_cloud_from_z(depth, self.camera)
@@ -1632,7 +1642,8 @@ class SemMapOnTrainer(BaseRLTrainer):
         map[map >= 1] = 1.0
         grid_map[:, :, :, 0] = map
         
-        grid_map[:, :, :, 1] = np.maximum(grid_map[:, :, :, 1], sem_map_counts[:, :, :, 1])
+        #grid_map[:, :, :, 1] = np.maximum(grid_map[:, :, :, 1], sem_map_counts[:, :, :, 1])
+        grid_map[:, :, :, 1] = sem_map_counts[:, :, :, 1]
 
         return grid_map
         

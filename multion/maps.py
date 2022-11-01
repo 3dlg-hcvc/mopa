@@ -20,14 +20,13 @@ except ImportError:
 
 
 # Multion Objects
-# MULTION_CYL_OBJECT_CATEGORY = {'cylinder_red':0, 'cylinder_green':1, 'cylinder_blue':2, 'cylinder_yellow':3, 
-#                             'cylinder_white':4, 'cylinder_pink':5, 'cylinder_black':6, 'cylinder_cyan':7}
-# MULTION_CYL_OBJECT_MAP = {0: 'cylinder_red', 1: 'cylinder_green', 2: 'cylinder_blue', 3: 'cylinder_yellow', 
-#                             4: 'cylinder_white', 5:'cylinder_pink', 6: 'cylinder_black', 7: 'cylinder_cyan'}
 MULTION_CYL_OBJECT_CATEGORY = {'cylinder_red':1, 'cylinder_green':2, 'cylinder_blue':3, 'cylinder_yellow':4, 
                             'cylinder_white':5, 'cylinder_pink':6, 'cylinder_black':7, 'cylinder_cyan':8}
-MULTION_CYL_OBJECT_MAP = {1: 'cylinder_red', 2: 'cylinder_green', 3: 'cylinder_blue', 4: 'cylinder_yellow', 
-                            5: 'cylinder_white', 6:'cylinder_pink', 7: 'cylinder_black', 8: 'cylinder_cyan'}
+MULTION_CYL_OBJECT_MAP = dict((v,k) for k,v in MULTION_CYL_OBJECT_CATEGORY.items())
+MULTION_REAL_OBJECT_CATEGORY = {'guitar': 1, 'electric_piano': 2, 'basket_ball': 3, 'toy_train': 4, 
+                                'teddy_bear': 5, 'rocking_horse': 6, 'backpack': 7, 'trolley_bag': 8}
+MULTION_REAL_OBJECT_MAP = dict((v,k) for k,v in MULTION_REAL_OBJECT_CATEGORY.items())
+
 MULTION_TOP_DOWN_MAP_START = 20
 OBJECT_MAP_COLORS = np.full((100, 3), 150, dtype=np.uint8)
 OBJECT_MAP_COLORS[0] = [50, 50, 50]

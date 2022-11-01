@@ -11,6 +11,8 @@ import torch
 from habitat_baselines.common.baseline_registry import baseline_registry
 from baselines.rl.ppo.ppo_trainer_hier import HierOnTrainer
 from baselines.rl.ppo.ppo_trainer_sem_map import SemMapOnTrainer
+from baselines.rl.ppo.ppo_trainer_pred_sem_map import PredSemMapOnTrainer
+from baselines.rl.ppo.ppo_trainer_pred_sem_map_w_real_obj import PredSemMapRealOnTrainer
 from baselines.config.default import get_config
 from baselines.nonlearning_agents import (
     evaluate_agent,

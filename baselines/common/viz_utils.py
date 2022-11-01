@@ -202,7 +202,7 @@ def draw_found(view: np.ndarray, alpha: float = 1) -> np.ndarray:
 
 def observations_to_image(observation: Dict, projected_features: np.ndarray=None, 
         egocentric_projection: np.ndarray=None, global_map: np.ndarray=None, 
-        info: Dict=None, action: np.ndarray=None, object_map: np.ndarray=None,
+        info: Dict=None, action: np.ndarray=None, object_map: np.ndarray=None, predicted_semantic=None,
         semantic_projections: np.ndarray=None, global_object_map: np.ndarray=None, 
         agent_view: np.ndarray=None, config: np.ndarray=None) -> np.ndarray:
     r"""Generate image of single frame from observation and info
@@ -397,6 +397,26 @@ def observations_to_image(observation: Dict, projected_features: np.ndarray=None
             interpolation=cv2.INTER_CUBIC,
         )
         frame = np.concatenate((frame, agent_view), axis=1)
+        
+    if predicted_semantic is not None:
+        observation_size = predicted_semantic.shape[0]
+        if not isinstance(predicted_semantic, np.ndarray):
+            predicted_semantic = predicted_semantic.cpu().numpy()
+
+        predicted_semantic = (predicted_semantic + 1).squeeze().astype(np.uint8)
+
+        predicted_semantic = multion_maps.OBJECT_MAP_COLORS[predicted_semantic]
+        # scale map to align with rgb view
+        old_h, old_w, _ = predicted_semantic.shape
+        _height = observation_size
+        _width = int(float(_height) / old_h * old_w)
+        # cv2 resize (dsize is width first)
+        predicted_semantic = cv2.resize(
+            predicted_semantic,
+            (_width, _height),
+            interpolation=cv2.INTER_CUBIC,
+        )
+        frame = np.concatenate((frame, predicted_semantic), axis=1)
         
     if object_map is not None:
         if not isinstance(object_map, np.ndarray):

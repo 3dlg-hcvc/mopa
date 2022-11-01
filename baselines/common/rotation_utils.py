@@ -15,15 +15,30 @@ def normalize(v):
 
 def get_r_matrix(ax_, angle):
     ax = normalize(ax_)
-    if np.abs(angle) > ANGLE_EPS:
-        S_hat = np.array(
-            [[0.0, -ax[2], ax[1]], [ax[2], 0.0, -ax[0]], [-ax[1], ax[0], 0.0]],
-            dtype=np.float32)
-        R = np.eye(3) + np.sin(angle) * S_hat + \
-            (1 - np.cos(angle)) * (np.linalg.matrix_power(S_hat, 2))
+    if isinstance(angle, np.ndarray):
+        Rs = []
+        for i in range(len(angle)):
+            if np.abs(angle[i]) > ANGLE_EPS:
+                S_hat = np.array(
+                    [[0.0, -ax[2], ax[1]], [ax[2], 0.0, -ax[0]], [-ax[1], ax[0], 0.0]],
+                    dtype=np.float32)
+                R = np.eye(3) + np.sin(angle[i]) * S_hat + \
+                    (1 - np.cos(angle[i])) * (np.linalg.matrix_power(S_hat, 2))
+            else:
+                R = np.eye(3)
+            Rs.append(R)
+        Rs = np.concatenate(Rs, axis=0).reshape(-1,3,3)
+        return Rs
     else:
-        R = np.eye(3)
-    return R
+        if np.abs(angle) > ANGLE_EPS:
+            S_hat = np.array(
+                [[0.0, -ax[2], ax[1]], [ax[2], 0.0, -ax[0]], [-ax[1], ax[0], 0.0]],
+                dtype=np.float32)
+            R = np.eye(3) + np.sin(angle) * S_hat + \
+                (1 - np.cos(angle)) * (np.linalg.matrix_power(S_hat, 2))
+        else:
+            R = np.eye(3)
+        return R
 
 
 def r_between(v_from_, v_to_):
