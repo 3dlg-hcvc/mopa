@@ -1218,10 +1218,10 @@ class SemMapOnTrainer(BaseRLTrainer):
                 #self.object_maps[i, agent_locs[i, 0], agent_locs[i, 1], 2] = 10
                 self.object_maps[
                     i,
-                    int(max(0, agent_locs[i, 0] - self.config.TASK_CONFIG.TASK.OBJECT_MAP_SENSOR.object_padding)):
-                        int(min(self.map_grid_size, agent_locs[i, 0] + self.config.TASK_CONFIG.TASK.OBJECT_MAP_SENSOR.object_padding)),
-                    int(max(0, agent_locs[i, 1] - self.config.TASK_CONFIG.TASK.OBJECT_MAP_SENSOR.object_padding)):
-                        int(min(self.map_grid_size, agent_locs[i, 1] + self.config.TASK_CONFIG.TASK.OBJECT_MAP_SENSOR.object_padding)),
+                    int(max(0, agent_locs[i, 0] - self.config.RL.SEM_MAP_POLICY.object_padding)):
+                        int(min(self.map_grid_size, agent_locs[i, 0] + self.config.RL.SEM_MAP_POLICY.object_padding)),
+                    int(max(0, agent_locs[i, 1] - self.config.RL.SEM_MAP_POLICY.object_padding)):
+                        int(min(self.map_grid_size, agent_locs[i, 1] + self.config.RL.SEM_MAP_POLICY.object_padding)),
                     2] = 10
                 
                 # Perform steps 2-4 only when the agent is starting or a goal is reached
@@ -1310,8 +1310,8 @@ class SemMapOnTrainer(BaseRLTrainer):
                 # Mark the sampled goal on the map for visualization
                 self.object_maps[i, :, :, 3] = 0 # reset goal position
                 self.object_maps[i, 
-                            int(max(0, goal_grid_loc[0]-self.config.TASK_CONFIG.TASK.OBJECT_MAP_SENSOR.object_padding)): int(min(oracle_map_size[i][0][0], goal_grid_loc[0]+self.config.TASK_CONFIG.TASK.OBJECT_MAP_SENSOR.object_padding)), 
-                            int(max(0, goal_grid_loc[1]-self.config.TASK_CONFIG.TASK.OBJECT_MAP_SENSOR.object_padding)): int(min(oracle_map_size[i][0][1], goal_grid_loc[1]+self.config.TASK_CONFIG.TASK.OBJECT_MAP_SENSOR.object_padding)), 
+                            int(max(0, goal_grid_loc[0]-self.config.RL.SEM_MAP_POLICY.object_padding)): int(min(oracle_map_size[i][0][0], goal_grid_loc[0]+self.config.RL.SEM_MAP_POLICY.object_padding)), 
+                            int(max(0, goal_grid_loc[1]-self.config.RL.SEM_MAP_POLICY.object_padding)): int(min(oracle_map_size[i][0][1], goal_grid_loc[1]+self.config.RL.SEM_MAP_POLICY.object_padding)), 
                             3] = 11  # num of objects=8, agent marked as 10
                 if is_goal[i] == 0:
                     steps_towards_short_term_goal[i] += 1
