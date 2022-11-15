@@ -68,11 +68,6 @@ from baselines.rl.ddppo.policy import (  # noqa: F401.
     PointNavResNetPolicy,
 )
 from multion import maps as multion_maps
-from baselines.common.utils import (
-    draw_projection,
-    rotate_tensor,
-    get_grid,
-)
 import torch.nn.functional as F
 from habitat.utils.geometry_utils import (
     quaternion_from_coeff,
@@ -82,7 +77,7 @@ from baselines.rl.models.projection import Projection, RotateTensor, get_grid
 import baselines.common.depth_utils as du
 import baselines.common.rotation_utils as ru
 #from habitat.utils.visualizations import fog_of_war
-import baselines.common.fog_of_war as fog_of_war
+#import baselines.common.fog_of_war as fog_of_war
 #from baselines.common.object_detector_cyl import ObjectDetector
 
 @baseline_registry.register_trainer(name="semmapon")
