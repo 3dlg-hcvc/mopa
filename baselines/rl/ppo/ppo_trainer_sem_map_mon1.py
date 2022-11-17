@@ -17,7 +17,6 @@ from numpy import float32, ndarray, uint8
 from torch import Tensor
 import torch
 from torch import nn
-from torchvision import ops
 import tqdm
 from torch.optim.lr_scheduler import LambdaLR
 
@@ -79,11 +78,11 @@ import baselines.common.depth_utils as du
 import baselines.common.rotation_utils as ru
 #from habitat.utils.visualizations import fog_of_war
 #import baselines.common.fog_of_war as fog_of_war
-from baselines.common.object_detector_real import ObjectDetectorReal
+#from baselines.common.object_detector_cyl import ObjectDetector
 
-@baseline_registry.register_trainer(name="predsemmapreal")
-class PredSemMapRealOnTrainer(BaseRLTrainer):
-    r"""Trainer class for predicted semantic map for real/natural objects
+@baseline_registry.register_trainer(name="semmapon")
+class SemMapOnTrainer(BaseRLTrainer):
+    r"""Trainer class for predicted semantic map
     """
     supported_tasks = ["Nav-v0"]
 
@@ -911,7 +910,6 @@ class PredSemMapRealOnTrainer(BaseRLTrainer):
         is_goal: Tensor,
         grid_map: Tensor,
         object_maps: Tensor,
-        #pred_ious: Tensor,
     ) -> Tuple[
         VectorEnv,
         Tensor,
@@ -925,7 +923,6 @@ class PredSemMapRealOnTrainer(BaseRLTrainer):
         Tensor,
         Tensor,
         Tensor,
-        #Tensor,
     ]:
         # pausing self.envs with no new episode
         if len(envs_to_pause) > 0:
@@ -946,7 +943,6 @@ class PredSemMapRealOnTrainer(BaseRLTrainer):
             is_goal = is_goal[state_index]
             grid_map = grid_map[state_index]
             object_maps = object_maps[state_index]
-            #pred_ious = pred_ious[state_index]
 
             for k, v in batch.items():
                 batch[k] = v[state_index]
@@ -965,10 +961,9 @@ class PredSemMapRealOnTrainer(BaseRLTrainer):
             global_object_map,
             is_goal,
             grid_map,
-            object_maps,
-            #pred_ious
+            object_maps
         )
-
+        
     def _eval_checkpoint(
         self,
         checkpoint_path: str,
@@ -1132,7 +1127,6 @@ class PredSemMapRealOnTrainer(BaseRLTrainer):
             dtype=torch.bool,
         )
         stubborn_goal_queues = [[] for _ in range(self.config.NUM_ENVIRONMENTS)]
-        pred_ious = [[] for _ in range(self.config.NUM_ENVIRONMENTS)]
         
         ##Depth
         self.camera = du.get_camera_matrix(
@@ -1154,7 +1148,7 @@ class PredSemMapRealOnTrainer(BaseRLTrainer):
         #   [elevation+slice_range_below, elevation+slice_range_above]
         self.slice_range_below = -1 # Should be 0 or negative
         self.slice_range_above = 10.5 # Should be 0 or positive
-        self.z_bins = [0.1, 1.5]
+        self.z_bins = [0.5, 1.5]
         
         ##
         
@@ -1175,7 +1169,7 @@ class PredSemMapRealOnTrainer(BaseRLTrainer):
                     self.config.RL.SEM_MAP_POLICY.coordinate_min], device=self.device)
         # 
         
-        self._detector = ObjectDetectorReal()
+        #_detector = ObjectDetector()
         
         stats_episodes: Dict[
             Any, Any
@@ -1209,12 +1203,13 @@ class PredSemMapRealOnTrainer(BaseRLTrainer):
             current_episodes = self.envs.current_episodes()
             
             next_goal_category = batch['multiobjectgoal']
+            if "is_mp3d" in self.config.RL.POLICY and self.config.RL.POLICY.is_mp3d:
+                next_goal_category = next_goal_category - 5000 + 1
             
             # 1) Get map with all objects
-            self.object_maps, agent_locs, semantic, _pred_ious = self.build_map(batch, self.object_maps, self.grid_map)
+            self.object_maps, agent_locs = self.build_map(batch, self.object_maps, self.grid_map)
                 
             for i in range(self.envs.num_envs):
-                pred_ious[i].append(_pred_ious[i].item())
                 # mark agent
                 self.object_maps[i, :, :, 2] = 0
                 #self.object_maps[i, agent_locs[i, 0], agent_locs[i, 1], 2] = 10
@@ -1296,7 +1291,7 @@ class PredSemMapRealOnTrainer(BaseRLTrainer):
                         
                     else:
                         is_goal[i] = 1
-                        goal_grid_loc = goal_grid_loc.float().mean(axis=0).type(torch.uint8)  # select one
+                        goal_grid_loc = goal_grid_loc[0]  # select any one match
                     
                     goal_grid[i] = goal_grid_loc
                     
@@ -1403,9 +1398,6 @@ class PredSemMapRealOnTrainer(BaseRLTrainer):
                     episode_stats = {
                         "reward": current_episode_reward[i].item()
                     }
-                    infos[i].update(
-                        {"pred_iou": np.array(pred_ious[i]).mean()}
-                    )
                     episode_stats.update(
                         self._extract_scalars_from_info(infos[i])
                     )
@@ -1421,8 +1413,7 @@ class PredSemMapRealOnTrainer(BaseRLTrainer):
                     if len(self.config.VIDEO_OPTION) > 0:
                         frame = observations_to_image(
                                 observation=batch[i], info=infos[i], action=actions[i].cpu().numpy(),
-                                object_map=self.object_maps[i],
-                                predicted_semantic=semantic[i], 
+                                object_map=self.object_maps[i], 
                                 #semantic_projections=(self.map > 0), #projection[i], 
                                 #global_object_map=global_object_map[i], 
                                 #agent_view=agent_view[i],
@@ -1431,7 +1422,7 @@ class PredSemMapRealOnTrainer(BaseRLTrainer):
                         if self.config.VIDEO_RENDER_ALL_INFO:
                             _m = self._extract_scalars_from_info(infos[i])
                             _m["reward"] = current_episode_reward[i].item()
-                            _m["next_goal"] = multion_maps.MULTION_REAL_OBJECT_MAP[next_goal_category[i].item()]
+                            _m["next_goal"] = multion_maps.MULTION_CYL_OBJECT_MAP[next_goal_category[i].item()]
                             if self.config.RL.POLICY.EXPLORATION_STRATEGY == "stubborn":
                                 _m["collision_count"] = collision_threshold_steps[i].item()
                             frame = overlay_frame(frame, _m)
@@ -1492,7 +1483,6 @@ class PredSemMapRealOnTrainer(BaseRLTrainer):
                     is_goal[i] = 0
                     collision_threshold_steps[i] = 0
                     self.grid_map[i,:,:,:] = np.zeros([self.map_grid_size, self.map_grid_size, 2], dtype=uint8)
-                    pred_ious[i] = []
 
                 # episode continues
                 else:
@@ -1500,7 +1490,6 @@ class PredSemMapRealOnTrainer(BaseRLTrainer):
                         frame = observations_to_image(
                                 observation=observations[i], info=infos[i], action=actions[i].cpu().numpy(),
                                 object_map=self.object_maps[i], 
-                                predicted_semantic=semantic[i],
                                 #semantic_projections=(self.map > 0), #projection[i], 
                                 #global_object_map=global_object_map[i], 
                                 #agent_view=agent_view[i],
@@ -1509,7 +1498,7 @@ class PredSemMapRealOnTrainer(BaseRLTrainer):
                         if self.config.VIDEO_RENDER_ALL_INFO:
                             _m = self._extract_scalars_from_info(infos[i])
                             _m["reward"] = current_episode_reward[i].item()
-                            _m["next_goal"] = multion_maps.MULTION_REAL_OBJECT_MAP[next_goal_category[i].item()]
+                            _m["next_goal"] = multion_maps.MULTION_CYL_OBJECT_MAP[next_goal_category[i].item()]
                             if self.config.RL.POLICY.EXPLORATION_STRATEGY == "stubborn":
                                 _m["collision_count"] = collision_threshold_steps[i].item()
                             frame = overlay_frame(frame, _m)
@@ -1554,8 +1543,7 @@ class PredSemMapRealOnTrainer(BaseRLTrainer):
                 global_object_map,
                 is_goal,
                 self.grid_map,
-                self.object_maps,
-                #pred_ious
+                self.object_maps
             ) = self._pause_envs(
                 envs_to_pause,
                 self.envs,
@@ -1569,8 +1557,7 @@ class PredSemMapRealOnTrainer(BaseRLTrainer):
                 global_object_map,
                 is_goal,
                 self.grid_map,
-                self.object_maps,
-                #pred_ious
+                self.object_maps
             )
 
         num_episodes = len(stats_episodes)
@@ -1605,39 +1592,20 @@ class PredSemMapRealOnTrainer(BaseRLTrainer):
         depth[depth == 0] = np.NaN
         #depth[depth > 10] = np.NaN
 
-        gt_semantic = observations['semantic'].squeeze(-1).cpu().numpy()
+        semantic = observations['semantic'].cpu().numpy()
         theta = observations['episodic_compass'].cpu().numpy()
         location = observations["episodic_gps"].cpu().numpy()
-        semantic = np.zeros_like(depth)
-        pred_ious = torch.zeros(self.config.NUM_ENVIRONMENTS)
-        results = self._detector.predict(observations['rgb'].squeeze(-1))
-        for i, res in enumerate(results):
-            if len(res['boxes'])> 0:
-                gt_bbox = []
-                for j, b in enumerate(res['boxes']):
-                    b = np.round(b).astype(int)
-                    # get the centroid
-                    # w=b[2]-b[0]
-                    # h=b[3]-b[1]
-                    # c=np.array([int(b[0]+w/2), int(b[1]+h/2)])
-                    # #
-                    # semantic[i, c[0]-11:c[0]+11, c[1]-5:c[1]+5] = res["labels"][j]  # real object semantic labels start at 1
-                    semantic[i, b[1]:b[3], b[0]:b[2]] = res["labels"][j]  # real object semantic labels start at 1
-                    # get GT bbox
-                    # if res["labels"][j] in gt_semantic[i]:
-                    #     gt_locs = (gt_semantic[i] * (gt_semantic[i] == res["labels"][j])).nonzero()
-                    #     gt_bbox.append(torch.tensor([np.min(gt_locs[1]), np.min(gt_locs[0]), np.max(gt_locs[1]), np.max(gt_locs[0])]))
-                
-                # if len(gt_bbox) > 0:
-                #     pred_ious[i] = ops.box_iou(torch.stack(gt_bbox), torch.tensor(res['boxes'])).mean()
-        semantic = semantic[..., np.newaxis]
+        
+        #res = _detector.predict(observations['rgb'])
+        if "is_mp3d" in self.config.RL.POLICY and self.config.RL.POLICY.is_mp3d:
+            semantic = np.where(semantic >= 5000, semantic-5000+1, 0*semantic) # other semantic labels are not needed
         
         coords = self._unproject_to_world(depth, location, theta)
         grid_map = self._add_to_map(coords, semantic, grid_map)
         _agent_locs = self.to_grid(location)
         object_maps[:, :, :, :2] = torch.tensor(grid_map)
         
-        return object_maps, _agent_locs, semantic, pred_ious
+        return object_maps, _agent_locs
     
     def _unproject_to_world(self, depth, location, theta):
         point_cloud = du.get_point_cloud_from_z(depth, self.camera)
@@ -1664,7 +1632,6 @@ class PredSemMapRealOnTrainer(BaseRLTrainer):
         grid_map[:, :, :, 0] = map
         
         grid_map[:, :, :, 1] = np.maximum(grid_map[:, :, :, 1], sem_map_counts[:, :, :, 1])
-        #grid_map[:, :, :, 1] = sem_map_counts[:, :, :, 1]
 
         return grid_map
         
