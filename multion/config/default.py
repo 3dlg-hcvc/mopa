@@ -130,6 +130,11 @@ _C.TASK.POSITION_SENSOR.TYPE = "PositionSensor"
 _C.TASK.HEADING_SENSOR = CN()
 _C.TASK.HEADING_SENSOR.TYPE = "HeadingSensor"
 # -----------------------------------------------------------------------------
+# AGENT HEADING SENSOR
+# -----------------------------------------------------------------------------
+_C.TASK.AGENT_HEADING_SENSOR = CN()
+_C.TASK.AGENT_HEADING_SENSOR.TYPE = "AgentHeadingSensor"
+# -----------------------------------------------------------------------------
 # COMPASS SENSOR
 # -----------------------------------------------------------------------------
 _C.TASK.COMPASS_SENSOR = CN()

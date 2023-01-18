@@ -112,8 +112,10 @@ def bin_points_w_sem(XYZS_cms, map_size, z_bins, xy_resolution, map_center):
         counts.append(np.reshape(count, [map_size, map_size, n_z_bins]))
         sem_labels.append(np.reshape(sem_label, [map_size, map_size, n_z_bins]))
 
-    counts = np.concatenate(counts, axis=0).reshape(sh[0], map_size, map_size, n_z_bins)
-    sem_labels = np.concatenate(sem_labels, axis=0).reshape(sh[0], map_size, map_size, n_z_bins)
+    #counts = np.concatenate(counts, axis=0).reshape(sh[0], map_size, map_size, n_z_bins)
+    counts = np.concatenate(counts, axis=0).reshape(list(sh[:-3]) + [map_size, map_size, n_z_bins])
+    #sem_labels = np.concatenate(sem_labels, axis=0).reshape(sh[0], map_size, map_size, n_z_bins)
+    sem_labels = np.concatenate(sem_labels, axis=0).reshape(list(sh[:-3]) + [map_size, map_size, n_z_bins])
 
     return counts, sem_labels
 

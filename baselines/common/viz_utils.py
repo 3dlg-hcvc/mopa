@@ -204,7 +204,8 @@ def observations_to_image(observation: Dict, projected_features: np.ndarray=None
         egocentric_projection: np.ndarray=None, global_map: np.ndarray=None, 
         info: Dict=None, action: np.ndarray=None, object_map: np.ndarray=None, predicted_semantic=None,
         semantic_projections: np.ndarray=None, global_object_map: np.ndarray=None, 
-        agent_view: np.ndarray=None, config: np.ndarray=None) -> np.ndarray:
+        pred_sem_obs: np.ndarray=None, agent_view: np.ndarray=None, traversible:np.ndarray=None,
+        config: np.ndarray=None) -> np.ndarray:
     r"""Generate image of single frame from observation and info
     returned from a single environment step().
 
@@ -240,8 +241,12 @@ def observations_to_image(observation: Dict, projected_features: np.ndarray=None
     if "semantic" in observation:
         observation_size = observation["semantic"].shape[0]
         semantic_map = observation["semantic"].squeeze()
+            
         if not isinstance(semantic_map, np.ndarray):
             semantic_map = semantic_map.cpu().numpy()
+        
+        if config is not None and "is_mp3d" in config.RL.POLICY and config.RL.POLICY.is_mp3d:
+            semantic_map = np.where(semantic_map >= 5000, semantic_map-5000+1, 0*semantic_map) # other semantic labels are not needed
 
         semantic_map = (semantic_map + 1).astype(np.uint8)
 
@@ -418,6 +423,26 @@ def observations_to_image(observation: Dict, projected_features: np.ndarray=None
         )
         frame = np.concatenate((frame, predicted_semantic), axis=1)
         
+    if traversible is not None:
+        if not isinstance(traversible, np.ndarray):
+            traversible = traversible.cpu().numpy()
+        
+        # scale map to align with rgb view
+        old_h, old_w, = traversible.shape
+        _height = observation_size
+        _width = int(float(_height) / old_h * old_w)
+        occ_map = traversible[:,:].astype(np.uint8) #object_map[:,:,0].astype(np.uint8)
+        #occ_map = multion_maps.OCC_MAP_COLORS[occ_map]
+        occ_map = multion_maps.OBJECT_MAP_COLORS[occ_map]
+        
+        # cv2 resize (dsize is width first)
+        occ_map = cv2.resize(
+            occ_map,
+            (_width, _height),
+            interpolation=cv2.INTER_CUBIC,
+        )
+        frame = np.concatenate((frame, occ_map), axis=1)
+        
     if object_map is not None:
         if not isinstance(object_map, np.ndarray):
             object_map = object_map.cpu().numpy()
@@ -470,6 +495,15 @@ def observations_to_image(observation: Dict, projected_features: np.ndarray=None
             interpolation=cv2.INTER_CUBIC,
         )
         frame = np.concatenate((frame, global_object_map), axis=1)
+        
+    if pred_sem_obs is not None:
+        if not isinstance(pred_sem_obs, np.ndarray):
+            pred_sem_obs = pred_sem_obs.cpu().numpy()
+            
+        pred_sem_obs = (pred_sem_obs + 1).astype(np.uint8)
+
+        pred_sem_obs = multion_maps.OBJECT_MAP_COLORS[pred_sem_obs]
+        frame = np.concatenate((frame, pred_sem_obs), axis=1)
         
 
     return frame

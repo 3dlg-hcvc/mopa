@@ -39,6 +39,7 @@ OBJECT_MAP_COLORS[2:10] = np.array(
 )
 OBJECT_MAP_COLORS[10] = [255,165,0]   # Agent location
 OBJECT_MAP_COLORS[11] = [143, 0, 255]   # Sampled Goal location
+OBJECT_MAP_COLORS[90] = [106, 90, 205]  # not observed
 
 OCC_MAP_COLORS = np.full((5, 3), 150, dtype=np.uint8)
 OCC_MAP_COLORS[0] = [150, 150, 150]  # not explored

@@ -17,7 +17,7 @@ class ObjectDetector():
     def get_object_detection_model(self, num_classes=2):
         # load a model pre-trained pre-trained on COCO
         model = torchvision.models.detection.fasterrcnn_resnet50_fpn(
-            pretrained=True)
+            pretrained=False)
 
         # get number of input features for the classifier
         in_features = model.roi_heads.box_predictor.cls_score.in_features

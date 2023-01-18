@@ -11,18 +11,14 @@ import torch
 from habitat_baselines.common.baseline_registry import baseline_registry
 from baselines.rl.ppo.ppo_trainer_hier import HierOnTrainer
 from baselines.rl.ppo.ppo_trainer_sem_map import SemMapOnTrainer
-from baselines.rl.ppo.ppo_trainer_sem_map_real import SemMapOnRealTrainer
 from baselines.rl.ppo.ppo_trainer_pred_sem_map import PredSemMapOnTrainer
 from baselines.rl.ppo.ppo_trainer_pred_sem_map_w_real_obj import PredSemMapRealOnTrainer
 from baselines.rl.ppo.ppo_trainer_ora_map_w_path_planner import MapWithPathPlannerOnTrainer
 from baselines.rl.ppo.ppo_trainer_ora_map_w_fast_marching import MapWithFMMOnTrainer
-from baselines.rl.ppo.ppo_trainer_sem_map_shortest_pp import ShortestPathPlannerTrainer
-from baselines.rl.ppo.ppo_trainer_sem_map_shortest_pp_map import ShortestPathPlannerMapTrainer
-from baselines.rl.ppo.sem_seg_trainer import SemSegTrainer
-from baselines.rl.ppo.ppo_trainer_pred_sem_map_rednet import PredSemMapRedNetOnTrainer
 from baselines.config.default import get_config
-from baselines.nonlearning_agents import (
+from semantic_segmentation.train import (
     evaluate_agent,
+    train
 )
 
 def main():
@@ -67,22 +63,11 @@ def run_exp(exp_config: str, run_type: str, opts=None) -> None:
     np.random.seed(config.TASK_CONFIG.SEED)
     torch.manual_seed(config.TASK_CONFIG.SEED)
     
-    if run_type == "eval" and config.EVAL.EVAL_NONLEARNING:
-        evaluate_agent(config)
-        return
-    
-    trainer_init = baseline_registry.get_trainer(config.TRAINER_NAME)
-    config.defrost()
-    config.TASK_CONFIG.TRAINER_NAME = config.TRAINER_NAME
-    config.freeze()
-    
-    assert trainer_init is not None, f"{config.TRAINER_NAME} is not supported"
-    trainer = trainer_init(config)
-
     if run_type == "train":
-        trainer.train()
+        train(config)
     elif run_type == "eval":
-        trainer.eval()
+        evaluate_agent(config)
+    return
 
 if __name__ == "__main__":
     main()
