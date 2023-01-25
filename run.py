@@ -63,6 +63,12 @@ def run_exp(exp_config: str, run_type: str, opts=None) -> None:
         None.
     """
     config = get_config(exp_config, opts)
+    
+    if "SEED" in config:
+        config.defrost()
+        config.TASK_CONFIG.SEED = config.SEED
+        config.freeze()
+    
     random.seed(config.TASK_CONFIG.SEED)
     np.random.seed(config.TASK_CONFIG.SEED)
     torch.manual_seed(config.TASK_CONFIG.SEED)
