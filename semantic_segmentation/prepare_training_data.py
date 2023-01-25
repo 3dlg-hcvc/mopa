@@ -53,7 +53,7 @@ def make_data(config: Config) -> None:
     depth_frames = []
     semantic_frames = []
     
-    filename = os.path.join(config.output_dir, '{}_data_small.h5'.format(split))
+    filename = os.path.join(config.output_dir, '{}_data.h5'.format(split))
     
     for i in tqdm(range(num_episodes)):
         obs = env.reset()
@@ -68,7 +68,7 @@ def make_data(config: Config) -> None:
             depth_frames.append(np.expand_dims(np.squeeze(obs["depth"], axis=-1), axis=0))
             semantic_frames.append(np.expand_dims(np.squeeze(obs["semantic"], axis=-1), axis=0))
 
-        if (len(rgb_frames) % 500) >= 0:
+        if (len(rgb_frames) % 100) >= 0:
             rgb_frames = np.concatenate(rgb_frames, axis=0)
             depth_frames = np.concatenate(depth_frames, axis=0)
             semantic_frames = np.concatenate(semantic_frames, axis=0)
@@ -93,25 +93,26 @@ def make_data(config: Config) -> None:
             depth_frames = []
             semantic_frames = []
 
-    rgb_frames = np.concatenate(rgb_frames, axis=0)
-    depth_frames = np.concatenate(depth_frames, axis=0)
-    semantic_frames = np.concatenate(semantic_frames, axis=0)
+    if len(rgb_frames) > 0:
+        rgb_frames = np.concatenate(rgb_frames, axis=0)
+        depth_frames = np.concatenate(depth_frames, axis=0)
+        semantic_frames = np.concatenate(semantic_frames, axis=0)
 
-    if not os.path.exists(filename):
-        with h5py.File(filename, 'w') as f:
-            f.create_dataset('rgb', data=rgb_frames, dtype=np.float32, compression="gzip", chunks=True, maxshape=(None,256,256,3))
-            f.create_dataset('depth', data=depth_frames, dtype=np.float32, compression="gzip", chunks=True, maxshape=(None,256,256,))
-            f.create_dataset('semantic', data=semantic_frames, dtype=np.float32, compression="gzip", chunks=True, maxshape=(None,256,256,))
-    else:
-        with h5py.File(filename, 'a') as f:
-            f["rgb"].resize((f["rgb"].shape[0] + rgb_frames.shape[0]), axis = 0)
-            f["rgb"][-rgb_frames.shape[0]:] = rgb_frames
-            
-            f["depth"].resize((f["depth"].shape[0] + depth_frames.shape[0]), axis = 0)
-            f["depth"][-depth_frames.shape[0]:] = depth_frames
-            
-            f["semantic"].resize((f["semantic"].shape[0] + semantic_frames.shape[0]), axis = 0)
-            f["semantic"][-semantic_frames.shape[0]:] = semantic_frames
+        if not os.path.exists(filename):
+            with h5py.File(filename, 'w') as f:
+                f.create_dataset('rgb', data=rgb_frames, dtype=np.float32, compression="gzip", chunks=True, maxshape=(None,256,256,3))
+                f.create_dataset('depth', data=depth_frames, dtype=np.float32, compression="gzip", chunks=True, maxshape=(None,256,256,))
+                f.create_dataset('semantic', data=semantic_frames, dtype=np.float32, compression="gzip", chunks=True, maxshape=(None,256,256,))
+        else:
+            with h5py.File(filename, 'a') as f:
+                f["rgb"].resize((f["rgb"].shape[0] + rgb_frames.shape[0]), axis = 0)
+                f["rgb"][-rgb_frames.shape[0]:] = rgb_frames
+                
+                f["depth"].resize((f["depth"].shape[0] + depth_frames.shape[0]), axis = 0)
+                f["depth"][-depth_frames.shape[0]:] = depth_frames
+                
+                f["semantic"].resize((f["semantic"].shape[0] + semantic_frames.shape[0]), axis = 0)
+                f["semantic"][-semantic_frames.shape[0]:] = semantic_frames
 
 
 class OracleAgent(Agent):
@@ -145,7 +146,7 @@ class OracleAgent(Agent):
     
 if __name__ == '__main__':
     
-    exp_config = "/localhome/sraychau/Projects/Research/MultiON/codebase/multi-obj-nav/baselines/config/sem_seg/train_rednet_cyl_prepare_data.yaml"
+    exp_config = "/localhome/sraychau/Projects/Research/MultiON/codebase/multi-obj-nav/baselines/config/sem_seg/train_rednet_prepare_data.yaml"
     config = get_config(exp_config)
 
     make_data(config)

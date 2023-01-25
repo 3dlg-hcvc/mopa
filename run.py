@@ -20,6 +20,7 @@ from baselines.rl.ppo.ppo_trainer_sem_map_shortest_pp import ShortestPathPlanner
 from baselines.rl.ppo.ppo_trainer_sem_map_shortest_pp_map import ShortestPathPlannerMapTrainer
 from baselines.rl.ppo.sem_seg_trainer import SemSegTrainer
 from baselines.rl.ppo.ppo_trainer_pred_sem_map_rednet import PredSemMapRedNetOnTrainer
+from baselines.rl.ppo.ppo_trainer_sem_map_frontier import SemMapOnFrontierTrainer
 from baselines.config.default import get_config
 from baselines.nonlearning_agents import (
     evaluate_agent,

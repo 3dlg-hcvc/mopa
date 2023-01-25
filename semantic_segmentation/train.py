@@ -115,6 +115,9 @@ def convert_weights_cuda_cpu(weights, device):
         new_weights = weights
     return new_weights
 
+class_weights = [0.2, 2.0, 2.0, 2.0, 2.0, 
+                    2.0, 2.0, 2.0, 2.0]
+
 def train(config: Config):
     
     # image_h=256
@@ -155,7 +158,7 @@ def train(config: Config):
         model = nn.DataParallel(model)
         
     if "loss_type" in config.IL.RedNet and config.IL.RedNet.loss_type == "cel":
-        sem_loss = nn.CrossEntropyLoss()
+        sem_loss = nn.CrossEntropyLoss(weight=torch.tensor(class_weights))
     else:
         sem_loss = CrossEntropyLoss2d()
     
