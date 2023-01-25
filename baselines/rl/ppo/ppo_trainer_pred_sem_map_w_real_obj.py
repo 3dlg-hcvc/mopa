@@ -1301,9 +1301,10 @@ class PredSemMapRealOnTrainer(BaseRLTrainer):
                     goal_grid[i] = goal_grid_loc
                     
                     # 3) Convert map position to world position in 3D
-                    _locs = self.from_grid(goal_grid_loc[0], goal_grid_loc[1])
+                    _locs = self.from_grid(goal_grid_loc[0].item(), goal_grid_loc[1].item())
                     if self.config.RL.SEM_MAP_POLICY.use_world_loc:
-                        goal_world_coordinates[i] = torch.stack([_locs[1], torch.zeros_like(_locs[0]), -_locs[0]], axis=-1)
+                        # goal_world_coordinates[i] = torch.stack([_locs[1], torch.zeros_like(_locs[0]), -_locs[0]], axis=-1)
+                        goal_world_coordinates[i] = torch.from_numpy(np.stack([_locs[1], np.zeros_like(_locs[0]), -_locs[0]], axis=-1))
                     else:
                         goal_world_coordinates[i] = torch.stack([_locs[0], _locs[1]], axis=-1)
                 

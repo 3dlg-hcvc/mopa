@@ -7,6 +7,7 @@ import contextlib
 import os
 import time
 import math
+import csv
 from collections import defaultdict, deque
 from typing import Any, Dict, List, Optional, Tuple, Union
 from gym import spaces
@@ -1166,6 +1167,13 @@ class PredSemMapOnTrainer(BaseRLTrainer):
             device=self.device,
             dtype=torch.float,
         )
+        self.visited = torch.zeros(
+            self.config.NUM_ENVIRONMENTS,
+            self.map_grid_size,
+            self.map_grid_size,
+            device=self.device,
+            dtype=torch.long,
+        )
         
         # Assume map size with configurable params
         oracle_map_size = torch.zeros(self.envs.num_envs, 3, 2)
@@ -1181,6 +1189,18 @@ class PredSemMapOnTrainer(BaseRLTrainer):
             Any, Any
         ] = {}  # dict of dicts that stores stats per episode
 
+        # Saving all predictions
+        results_dir = os.path.join(self.config.RESULTS_DIR, self.config.EVAL.SPLIT)
+        os.makedirs(results_dir, exist_ok=True)
+        _creation_timestamp = str(time.time())
+        with open(os.path.join(results_dir, f"stats_all_{_creation_timestamp}.csv"), 'a') as f:
+            csv_header = ["episode_id","reward","total_area","covered_area",
+                          "covered_area_ratio","episode_length","distance_to_currgoal",
+                          "distance_to_multi_goal","sub_success","success","mspl",
+                          "progress","pspl"]
+            _csv_writer = csv.writer(f)
+            _csv_writer.writerow(csv_header)
+            
         rgb_frames = [
             [] for _ in range(self.config.NUM_ENVIRONMENTS)
         ]  # type: List[List[np.ndarray]]
@@ -1212,9 +1232,16 @@ class PredSemMapOnTrainer(BaseRLTrainer):
             
             # 1) Get map with all objects
             self.object_maps, agent_locs, semantic, _pred_ious = self.build_map(batch, self.object_maps, self.grid_map)
+            self.gt_maps = batch['object_map'][:,:,:,0]
+            self.gt_maps[self.gt_maps > 0] = 1.
                 
             for i in range(self.envs.num_envs):
                 pred_ious[i].append(_pred_ious[i].item())
+                # visited for coverage
+                self.visited[
+                    i,
+                    min(agent_locs[i, 0],self.map_grid_size-1), 
+                    min(agent_locs[i, 1],self.map_grid_size-1)] = 1
                 # mark agent
                 self.object_maps[i, :, :, 2] = 0
                 #self.object_maps[i, agent_locs[i, 0], agent_locs[i, 1], 2] = 10
@@ -1301,9 +1328,10 @@ class PredSemMapOnTrainer(BaseRLTrainer):
                     goal_grid[i] = goal_grid_loc
                     
                     # 3) Convert map position to world position in 3D
-                    _locs = self.from_grid(goal_grid_loc[0], goal_grid_loc[1])
+                    _locs = self.from_grid(goal_grid_loc[0].item(), goal_grid_loc[1].item())
                     if self.config.RL.SEM_MAP_POLICY.use_world_loc:
-                        goal_world_coordinates[i] = torch.stack([_locs[1], torch.zeros_like(_locs[0]), -_locs[0]], axis=-1)
+                        # goal_world_coordinates[i] = torch.stack([_locs[1], torch.zeros_like(_locs[0]), -_locs[0]], axis=-1)
+                        goal_world_coordinates[i] = torch.from_numpy(np.stack([_locs[1], np.zeros_like(_locs[0]), -_locs[0]], axis=-1))
                     else:
                         goal_world_coordinates[i] = torch.stack([_locs[0], _locs[1]], axis=-1)
                 
@@ -1406,6 +1434,15 @@ class PredSemMapOnTrainer(BaseRLTrainer):
                     infos[i].update(
                         {"pred_iou": np.array(pred_ious[i]).mean()}
                     )
+                    
+                    total_area = self.gt_maps[i,:,:].sum()
+                    cov_area = self.object_maps[i,:,:,0].sum()
+                    coverage_ratio = cov_area / self.gt_maps[i,:,:].sum()
+                    episode_stats.update({
+                        "total_area": total_area.item(),
+                        "covered_area": cov_area.item(),
+                        "covered_area_ratio": coverage_ratio.item()
+                    })
                     episode_stats.update(
                         self._extract_scalars_from_info(infos[i])
                     )
@@ -1434,6 +1471,7 @@ class PredSemMapOnTrainer(BaseRLTrainer):
                             _m["next_goal"] = multion_maps.MULTION_CYL_OBJECT_MAP[next_goal_category[i].item()]
                             if self.config.RL.POLICY.EXPLORATION_STRATEGY == "stubborn":
                                 _m["collision_count"] = collision_threshold_steps[i].item()
+                            _m["coverage_ratio"] = coverage_ratio
                             frame = overlay_frame(frame, _m)
 
                         rgb_frames[i].append(frame)
@@ -1493,6 +1531,21 @@ class PredSemMapOnTrainer(BaseRLTrainer):
                     collision_threshold_steps[i] = 0
                     self.grid_map[i,:,:,:] = np.zeros([self.map_grid_size, self.map_grid_size, 2], dtype=uint8)
                     pred_ious[i] = []
+                    self.visited[i,:,:] = torch.zeros(
+                        self.map_grid_size,
+                        self.map_grid_size,
+                        device=self.device,
+                        dtype=torch.long,
+                    )
+                    
+                    # Saving the prediction
+                    with open(os.path.join(results_dir, f"stats_all_{_creation_timestamp}.csv"), 'a') as f:
+                        _csv_writer = csv.writer(f)
+                        row_item = []
+                        row_item.append(current_episodes[i].scene_id + "_" + current_episodes[i].episode_id)
+                        for k,v in episode_stats.items():
+                            row_item.append(v)
+                        _csv_writer.writerow(row_item)
 
                 # episode continues
                 else:
@@ -1512,6 +1565,10 @@ class PredSemMapOnTrainer(BaseRLTrainer):
                             _m["next_goal"] = multion_maps.MULTION_CYL_OBJECT_MAP[next_goal_category[i].item()]
                             if self.config.RL.POLICY.EXPLORATION_STRATEGY == "stubborn":
                                 _m["collision_count"] = collision_threshold_steps[i].item()
+                            _m["total_area"] = self.gt_maps[i,:,:].sum()
+                            cov_area = self.object_maps[i,:,:,0].sum() #self.visited[i,:,:].sum()
+                            _m["visited_area"] = cov_area
+                            _m["coverage_ratio"] = cov_area / self.gt_maps[i,:,:].sum()
                             frame = overlay_frame(frame, _m)
 
                         rgb_frames[i].append(frame)
