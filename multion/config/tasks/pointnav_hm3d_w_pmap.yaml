@@ -42,15 +42,15 @@ TASK:
   GOAL_SENSOR_UUID: multiobjectgoal
 
   OBJECT_MAP_SENSOR:
-    meters_per_pixel: 0.3
-    map_size: 150
+    meters_per_pixel: 0.2
+    map_size: 400
     mask_map: True
     MAP_CHANNELS: 4
     object_ind_offset: 1
     FOV: 79
 
   ORACLE_MAP_SIZE_SENSOR:
-    meters_per_pixel: 0.3
+    meters_per_pixel: 0.2
   
   POINTGOAL_WITH_GPS_COMPASS_SENSOR:
     GOAL_FORMAT: "POLAR"

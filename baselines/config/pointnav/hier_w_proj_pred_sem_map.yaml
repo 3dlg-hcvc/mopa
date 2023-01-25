@@ -5,15 +5,15 @@ ENV_NAME: "NavRLEnv"
 SIMULATOR_GPU_ID: 0
 TORCH_GPU_ID: 0
 VIDEO_OPTION: []
-TENSORBOARD_DIR: "experiments/pointnav/hm3d-depth/hierarchical/proj_detected_sem_map/eval_val/eval_hm3d_tb"
+TENSORBOARD_DIR: "/project/3dlg-hcvc/multion/curriculum/pointnav/paper2022/proj_detected_sem_map/3on/cyl/eval_val/eval_hm3d_tb"
 VIDEO_DIR: "experiments/pointnav/hm3d-depth/hierarchical/proj_detected_sem_map/eval_val/video_dir"
 VIDEO_RENDER_ALL_INFO: True
 TEST_EPISODE_COUNT: -1
 EVAL_CKPT_PATH_DIR: "data/hm3d_ddppo_pointnav_baselines_v1/hm3d-depth/ckpt.60.pth"
-NUM_ENVIRONMENTS: 12
+NUM_ENVIRONMENTS: 4
 SENSORS: ["RGB_SENSOR", "DEPTH_SENSOR", "SEMANTIC_SENSOR"]
 CHECKPOINT_FOLDER: "experiments/pointnav/hm3d-depth/hierarchical/proj_detected_sem_map/eval_val/checkpoints"
-LOG_FILE: "experiments/pointnav/hm3d-depth/hierarchical/proj_detected_sem_map/eval_val/eval_hm3d.log"
+LOG_FILE: "/project/3dlg-hcvc/multion/curriculum/pointnav/paper2022/proj_detected_sem_map/3on/cyl/eval_val/eval_hm3d.log"
 NUM_UPDATES: -1
 TOTAL_NUM_STEPS: 2.5e9
 LOG_INTERVAL: 10
@@ -48,9 +48,9 @@ RL:
     
   POLICY:
     name: "PointNavResNetPolicy"
-    EXPLORATION_STRATEGY: "stubborn"  # can be one of ["random", "stubborn"]
+    EXPLORATION_STRATEGY: "random"  # can be one of ["random", "stubborn"]
     EXPLORE_RADIUS: 50
-    MAX_STEPS_BEFORE_GOAL_SELECTION: 100
+    MAX_STEPS_BEFORE_GOAL_SELECTION: 50
     global_map_size: 250
     USE_LOCAL_MAP_FOR_STUBBORN: True
     local_map_size: 15
