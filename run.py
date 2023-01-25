@@ -18,7 +18,6 @@ from baselines.rl.ppo.ppo_trainer_ora_map_w_path_planner import MapWithPathPlann
 from baselines.rl.ppo.ppo_trainer_ora_map_w_fast_marching import MapWithFMMOnTrainer
 from baselines.rl.ppo.ppo_trainer_sem_map_shortest_pp import ShortestPathPlannerTrainer
 from baselines.rl.ppo.ppo_trainer_sem_map_shortest_pp_map import ShortestPathPlannerMapTrainer
-from baselines.rl.ppo.sem_seg_trainer import SemSegTrainer
 from baselines.rl.ppo.ppo_trainer_pred_sem_map_rednet import PredSemMapRedNetOnTrainer
 from baselines.rl.ppo.ppo_trainer_sem_map_frontier import SemMapOnFrontierTrainer
 from baselines.config.default import get_config
