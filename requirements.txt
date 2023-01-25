@@ -7,3 +7,7 @@ einops
 tensorboard
 jsonlines
 scikit-learn==0.24.2
+scikit-image
+scikit-fmm
+tensorboardX
+h5py
