@@ -42,11 +42,11 @@ TASK:
   GOAL_SENSOR_UUID: multiobjectgoal
 
   OBJECT_MAP_SENSOR:
-    meters_per_pixel: 0.3
-    map_size: 150
+    meters_per_pixel: 0.2
+    map_size: 250
     mask_map: True
     MAP_CHANNELS: 4
-    object_ind_offset: 1
+    object_ind_offset: 2
     FOV: 79
 
   ORACLE_MAP_SIZE_SENSOR:

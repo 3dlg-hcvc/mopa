@@ -102,5 +102,5 @@ class FMMPlanner():
             replan = True
         else:
             replan = False
-        return (stg_x + state[0] - self.du) * scale + 0.5, \
-               (stg_y + state[1] - self.du) * scale + 0.5, replan
+        return int((stg_x + state[0] - self.du) * scale + 0.5), \
+               int((stg_y + state[1] - self.du) * scale + 0.5), replan

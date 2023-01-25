@@ -77,15 +77,13 @@ from habitat.utils.geometry_utils import (
 from baselines.rl.models.projection import Projection, RotateTensor, get_grid
 import baselines.common.depth_utils as du
 import baselines.common.rotation_utils as ru
-from habitat.utils.visualizations import fog_of_war
+#from habitat.utils.visualizations import fog_of_war
+#import baselines.common.fog_of_war as fog_of_war
 #from baselines.common.object_detector_cyl import ObjectDetector
-from habitat.sims.habitat_simulator.actions import HabitatSimActions
-import skimage
-from baselines.common.fmm_planner import FMMPlanner
 
-@baseline_registry.register_trainer(name="shortestppmap")
-class ShortestPathPlannerMapTrainer(BaseRLTrainer):
-    r"""Trainer class for predicted semantic map
+@baseline_registry.register_trainer(name="semmapon_real")
+class SemMapOnRealTrainer(BaseRLTrainer):
+    r"""Trainer class for semantic map of Real/Nat objects
     """
     supported_tasks = ["Nav-v0"]
 
@@ -301,15 +299,15 @@ class ShortestPathPlannerMapTrainer(BaseRLTrainer):
         if rank0_only() and not os.path.isdir(self.config.CHECKPOINT_FOLDER):
             os.makedirs(self.config.CHECKPOINT_FOLDER)
 
-        # self._setup_actor_critic_agent(ppo_cfg)
-        # if self._is_distributed:
-        #     self.agent.init_distributed(find_unused_params=True)  # type: ignore
+        self._setup_actor_critic_agent(ppo_cfg)
+        if self._is_distributed:
+            self.agent.init_distributed(find_unused_params=True)  # type: ignore
 
-        # logger.info(
-        #     "agent number of parameters: {}".format(
-        #         sum(param.numel() for param in self.agent.parameters())
-        #     )
-        # )
+        logger.info(
+            "agent number of parameters: {}".format(
+                sum(param.numel() for param in self.agent.parameters())
+            )
+        )
 
         obs_space = self.obs_space
         if self._static_encoder:
@@ -1014,10 +1012,10 @@ class ShortestPathPlannerMapTrainer(BaseRLTrainer):
             config.TASK_CONFIG.TASK.MEASUREMENTS.append("COLLISIONS")
             config.freeze()
 
-        # if self.config.RL.POLICY.EXPLORATION_STRATEGY == "stubborn":
-        config.defrost()
-        config.TASK_CONFIG.TASK.MEASUREMENTS.append("COLLISIONS")
-        config.freeze()
+        if self.config.RL.POLICY.EXPLORATION_STRATEGY == "stubborn":
+            config.defrost()
+            config.TASK_CONFIG.TASK.MEASUREMENTS.append("COLLISIONS")
+            config.freeze()
             
         if config.VERBOSE:
             logger.info(f"env config: {config}")
@@ -1065,12 +1063,6 @@ class ShortestPathPlannerMapTrainer(BaseRLTrainer):
             device=self.device,
         )
         prev_actions = torch.zeros(
-            self.config.NUM_ENVIRONMENTS,
-            *action_shape,
-            device=self.device,
-            dtype=torch.long if discrete_actions else torch.float,
-        )
-        actions = torch.zeros(
             self.config.NUM_ENVIRONMENTS,
             *action_shape,
             device=self.device,
@@ -1157,33 +1149,15 @@ class ShortestPathPlannerMapTrainer(BaseRLTrainer):
         #   [elevation+slice_range_below, elevation+slice_range_above]
         self.slice_range_below = -1 # Should be 0 or negative
         self.slice_range_above = 10.5 # Should be 0 or positive
-        self.z_bins = [0.5, 1.5]
+        self.z_bins = [0.1, 1.5]
         
         ##
-        
-        self.selem = skimage.morphology.disk(10 / self.map_resolution)
-        self.selem_small = skimage.morphology.disk(1)
-        self.dt = 10
-        self.short_goal_dist = 1
-        self.recover_on_collision = True
-        self.fix_thrashing = True
-        num_rots = int(np.round(180 / self.config.TASK_CONFIG.SIMULATOR.TURN_ANGLE))
-        self.recovery_actions = [HabitatSimActions.TURN_LEFT]*num_rots + [HabitatSimActions.MOVE_FORWARD]*6
-        self.acts = [[] for _ in range(self.config.NUM_ENVIRONMENTS)]
-        self.thrashing_actions = []
         
         self.object_maps = torch.zeros(
             self.config.NUM_ENVIRONMENTS,
             self.map_grid_size,
             self.map_grid_size,
             self.config.RL.SEM_MAP_POLICY.MAP_CHANNELS,
-            device=self.device,
-            dtype=torch.float,
-        )
-        self.collision_map = torch.zeros(
-            self.config.NUM_ENVIRONMENTS,
-            self.map_grid_size,
-            self.map_grid_size,
             device=self.device,
             dtype=torch.float,
         )
@@ -1195,40 +1169,6 @@ class ShortestPathPlannerMapTrainer(BaseRLTrainer):
             device=self.device,
             dtype=torch.long,
         )
-        self.num_goals_completed = [0 for _ in range(self.envs.num_envs)]
-        self.relative_angles = torch.zeros(
-            self.config.NUM_ENVIRONMENTS,
-            1,
-            device=self.device,
-            dtype=torch.long,
-        )
-        self.stg = torch.zeros(
-            self.config.NUM_ENVIRONMENTS,
-            2,
-            device=self.device,
-            dtype=torch.long,
-        )
-        self.prev_locs = np.zeros(
-            (self.config.NUM_ENVIRONMENTS,
-            2),
-            dtype=np.long,
-        )
-        self.unstuck_actions = [[
-                                        
-                                        HabitatSimActions.TURN_LEFT,
-                                        HabitatSimActions.MOVE_FORWARD,
-                                        HabitatSimActions.TURN_LEFT,
-                                        HabitatSimActions.TURN_LEFT,
-                                        HabitatSimActions.MOVE_FORWARD,
-                                        HabitatSimActions.TURN_LEFT,
-                                        HabitatSimActions.TURN_LEFT,
-                                        HabitatSimActions.TURN_LEFT,
-                                        HabitatSimActions.MOVE_FORWARD,
-                                      ] for _ in range(self.config.NUM_ENVIRONMENTS)]
-        
-        self.unstuck_mode = [False for _ in range(self.config.NUM_ENVIRONMENTS)]
-        self.stuck_steps = [0 for _ in range(self.config.NUM_ENVIRONMENTS)]
-        self.stuck_max_steps = 10
         
         # Assume map size with configurable params
         oracle_map_size = torch.zeros(self.envs.num_envs, 3, 2)
@@ -1243,7 +1183,7 @@ class ShortestPathPlannerMapTrainer(BaseRLTrainer):
         stats_episodes: Dict[
             Any, Any
         ] = {}  # dict of dicts that stores stats per episode
-
+        
         # Saving all predictions
         results_dir = os.path.join(self.config.RESULTS_DIR, self.config.EVAL.SPLIT)
         os.makedirs(results_dir, exist_ok=True)
@@ -1291,21 +1231,6 @@ class ShortestPathPlannerMapTrainer(BaseRLTrainer):
             self.gt_maps[self.gt_maps > 0] = 1.
                 
             for i in range(self.envs.num_envs):
-                # hide unobserved area for occupancy channel
-                # occ_map = self.object_maps[i, :, :, 0].cpu().numpy()
-                # _fog_of_war_mask = np.zeros_like(occ_map, dtype=np.uint8)
-                # _fog_of_war_mask = fog_of_war.reveal_fog_of_war(
-                #     occ_map.astype(int),
-                #     _fog_of_war_mask,
-                #     np.array(agent_locs[i]),
-                #     -batch[i]['episodic_compass'].item(),
-                #     fov=self.config.TASK_CONFIG.SIMULATOR.RGB_SENSOR.HFOV,
-                #     max_line_len=100.0 #/ self.map_resolution,
-                # )
-                # occ_map += 1
-                # occ_map *= _fog_of_war_mask # Hide unobserved areas
-                # self.object_maps[i, :, :, 0] = torch.tensor(occ_map)
-                
                 # visited for coverage
                 self.visited[
                     i,
@@ -1396,17 +1321,12 @@ class ShortestPathPlannerMapTrainer(BaseRLTrainer):
                     
                     goal_grid[i] = goal_grid_loc
                     
-                    # 3) Convert map position to world position in 3D relative
+                    # 3) Convert map position to world position in 3D
                     _locs = self.from_grid(goal_grid_loc[0].item(), goal_grid_loc[1].item())
-                    _agent_world_pos = batch[i]["agent_position"].cpu().numpy()
-                    goal_world_coordinates[i] = torch.from_numpy(np.stack([_locs[1], _agent_world_pos[1], -_locs[0]], axis=-1))
-                    
-                    # convert goal location to goal world location absolute
-                    goal_position = goal_world_coordinates[i].cpu().numpy()
-                    goal_world_coordinates[i] = torch.from_numpy(quaternion_rotate_vector(
-                        quaternion_from_coeff(current_episodes[i].start_rotation), goal_position
-                    ) + current_episodes[i].start_position)
-                    goal_world_coordinates[i][1] = batch[i]["agent_position"][1]
+                    if self.config.RL.SEM_MAP_POLICY.use_world_loc:
+                        goal_world_coordinates[i] = torch.from_numpy(np.stack([_locs[1], np.zeros_like(_locs[0]), -_locs[0]], axis=-1))
+                    else:
+                        goal_world_coordinates[i] = torch.stack([_locs[0], _locs[1]], axis=-1)
                 
                 goal_grid_loc = goal_grid[i]
                     
@@ -1418,75 +1338,59 @@ class ShortestPathPlannerMapTrainer(BaseRLTrainer):
                             3] = 11  # num of objects=8, agent marked as 10
                 if is_goal[i] == 0:
                     steps_towards_short_term_goal[i] += 1
-            
-                # Check if agent is stuck for a while
-                if (prev_actions[i] == HabitatSimActions.MOVE_FORWARD and 
-                        self.get_l2_distance(agent_locs[i][0], self.prev_locs[i][0], 
-                                             agent_locs[i][1], self.prev_locs[i][1]) == 0):
-                    self.stuck_steps[i] += 1
-                    
-                if (self.unstuck_mode[i] or 
-                    self.stuck_steps[i] >= self.stuck_max_steps):
-                    
-                    self.unstuck_mode[i] = True
-                    self.stuck_steps[i] = 0
-                    
-                    if len(self.unstuck_actions[i]) > 0:
-                        act = self.unstuck_actions[i].pop(0)
-                    else:
-                        act = HabitatSimActions.MOVE_FORWARD
-                        self.unstuck_mode[i] = False
-                        self.unstuck_actions[i] = [
-                                        HabitatSimActions.TURN_LEFT,
-                                        HabitatSimActions.MOVE_FORWARD,
-                                        HabitatSimActions.TURN_LEFT,
-                                        HabitatSimActions.TURN_LEFT,
-                                        HabitatSimActions.MOVE_FORWARD,
-                                        HabitatSimActions.TURN_LEFT,
-                                        HabitatSimActions.TURN_LEFT,
-                                        HabitatSimActions.TURN_LEFT,
-                                        HabitatSimActions.MOVE_FORWARD,
-                                      ]
-                else:
-                    # plan a path and get next action
-                    #theta = batch[i]['episodic_compass'].cpu().numpy()[0]
-                    # theta = batch[i]['agent_heading'].cpu().numpy()[0]
-                    # act, relative_angle, short_term_goal = self.plan_path(agent_locs[i], goal_grid_loc, theta, i)
-                    
-                    planning_window = [0, self.map_grid_size-1, 0, self.map_grid_size-1]
-                    act, relative_angle, stg = self._get_stg(self.object_maps[i, :, :, 0].cpu().numpy(), 
-                                        self.visited[i, :, :].cpu().numpy(), 
-                                        agent_locs[i], batch[i]['episodic_compass'].cpu().numpy()[0],
-                                        goal_grid[i].cpu().numpy(), planning_window)
-                    
-                    # _act = self._get_gt_action(1 - self.explorable_map, agent_locs[i],
-                    #                         [int(stg[0]), int(stg[1])],
-                    #                         planning_window, batch[i]['episodic_compass'].cpu().numpy()[0])
-                    # act = self._get_gt_action(self.object_maps[i, :, :, 0].cpu().numpy(), 
-                    #                           agent_locs[i],
-                    #                         [int(stg[0]), int(stg[1])],
-                    #                         planning_window, batch[i]['episodic_compass'].cpu().numpy()[0])
-                    
-                    self.object_maps[i, 
-                            int(max(0, stg[0]-self.config.TASK_CONFIG.TASK.OBJECT_MAP_SENSOR.object_padding)): int(min(oracle_map_size[i][0][0], stg[0]+self.config.TASK_CONFIG.TASK.OBJECT_MAP_SENSOR.object_padding)), 
-                            int(max(0, stg[1]-self.config.TASK_CONFIG.TASK.OBJECT_MAP_SENSOR.object_padding)): int(min(oracle_map_size[i][0][1], stg[1]+self.config.TASK_CONFIG.TASK.OBJECT_MAP_SENSOR.object_padding)), 
-                            3] = 11  # num of objects=8, agent marked as 10
-                    
-                    self.relative_angles[i] = relative_angle
-                    self.stg[i] = torch.from_numpy(stg)
-                    
-                self.acts[i].append(act)
-                actions[i] = act
-                prev_actions[i] = actions[i]
-                self.prev_locs[i] = agent_locs[i]
                 
+                # 4) Convert 3D world positions to polar coordinates
+                if self.config.RL.SEM_MAP_POLICY.use_world_loc:
+                    agent_position = batch[i]["agent_position"]
+                    agent_rotation = batch[i]["agent_rotation"]
+                    
+                    # convert goal location to goal world location
+                    goal_position = goal_world_coordinates[i].cpu().numpy()
+                    g_position_world = quaternion_rotate_vector(
+                        quaternion_from_coeff(current_episodes[i].start_rotation), goal_position
+                    ) + current_episodes[i].start_position
+                    goal_observations[i] = torch.tensor(multion_maps.compute_pointgoal(
+                                        agent_position.cpu().numpy(), 
+                                        agent_rotation.cpu().numpy(), 
+                                        g_position_world), device=self.device)
+                    
+                else:
+                    agent_position = batch[i]["episodic_gps"]
+                    agent_rotation = batch[i]["episodic_rotation"]  # quaternion version of episodic_compass
+                    goal_observations[i] = torch.tensor(multion_maps.compute_pointgoal(
+                                            agent_position.cpu().numpy(), 
+                                            agent_rotation.cpu().numpy(), 
+                                            goal_world_coordinates[i].cpu().numpy()), device=self.device)
+                
+                # 5) Move to the goal
+            with torch.no_grad():
+                (
+                    _,
+                    actions,
+                    _,
+                    test_recurrent_hidden_states,
+                ) = self.actor_critic.act(
+                    batch,
+                    test_recurrent_hidden_states,
+                    prev_actions,
+                    not_done_masks,
+                    goal_observations,
+                    deterministic=False,
+                )
+
+                prev_actions.copy_(actions)  # type: ignore
+            # NB: Move actions to CPU.  If CUDA tensors are
+            # sent in to env.step(), that will create CUDA contexts
+            # in the subprocesses.
+            # For backwards compatibility, we also call .item() to convert to
+            # an int
             step_data = [{"action": a.item(), "action_args": {"is_goal": is_goal[i].item()}} for i,a in enumerate(actions.to(device="cpu"))]
+
             outputs = self.envs.step(step_data)
 
             observations, rewards_l, dones, infos = [
                 list(x) for x in zip(*outputs)
             ]
-            
             batch = batch_obs(  # type: ignore
                 observations,
                 device=self.device,
@@ -1525,9 +1429,9 @@ class ShortestPathPlannerMapTrainer(BaseRLTrainer):
                     cov_area = self.object_maps[i,:,:,0].sum()
                     coverage_ratio = cov_area / self.gt_maps[i,:,:].sum()
                     episode_stats.update({
-                        "total_area": total_area,
-                        "covered_area": cov_area,
-                        "covered_area_ratio": coverage_ratio
+                        "total_area": total_area.item(),
+                        "covered_area": cov_area.item(),
+                        "covered_area_ratio": coverage_ratio.item()
                     })
                     
                     episode_stats.update(
@@ -1554,14 +1458,10 @@ class ShortestPathPlannerMapTrainer(BaseRLTrainer):
                         if self.config.VIDEO_RENDER_ALL_INFO:
                             _m = self._extract_scalars_from_info(infos[i])
                             _m["reward"] = current_episode_reward[i].item()
-                            _m["next_goal"] = multion_maps.MULTION_CYL_OBJECT_MAP[next_goal_category[i].item()]
+                            _m["next_goal"] = multion_maps.MULTION_REAL_OBJECT_MAP[next_goal_category[i].item()]
                             if self.config.RL.POLICY.EXPLORATION_STRATEGY == "stubborn":
                                 _m["collision_count"] = collision_threshold_steps[i].item()
-                            _m["agent_loc"] = str(agent_locs[i])
-                            _m["goal_loc"] = str(goal_grid[i])
-                            _m["action"] = str(actions[i])
-                            _m["rel_angle"] = str(self.relative_angles[i].item())
-                            _m["stg"] = str(self.stg[i])
+                            _m["coverage_ratio"] = coverage_ratio
                             frame = overlay_frame(frame, _m)
 
                         rgb_frames[i].append(frame)
@@ -1626,25 +1526,6 @@ class ShortestPathPlannerMapTrainer(BaseRLTrainer):
                         device=self.device,
                         dtype=torch.long,
                     )
-                    self.num_goals_completed[i] = 0
-                    self.collision_map[i] = torch.zeros(
-                        self.map_grid_size,
-                        self.map_grid_size,
-                        device=self.device,
-                        dtype=torch.float,
-                    )
-                    self.relative_angles[i] = 0
-                    self.stg[i] = torch.zeros(
-                        2,
-                        device=self.device,
-                        dtype=torch.float
-                    )
-                    self.prev_locs[i] = np.zeros(
-                        2,
-                        dtype=np.long,
-                    )
-                    self.unstuck_mode[i] = False
-                    self.stuck_steps[i] = 0
                     
                     # Saving the prediction
                     with open(os.path.join(results_dir, f"stats_all_{_creation_timestamp}.csv"), 'a') as f:
@@ -1669,28 +1550,17 @@ class ShortestPathPlannerMapTrainer(BaseRLTrainer):
                         if self.config.VIDEO_RENDER_ALL_INFO:
                             _m = self._extract_scalars_from_info(infos[i])
                             _m["reward"] = current_episode_reward[i].item()
-                            _m["next_goal"] = multion_maps.MULTION_CYL_OBJECT_MAP[next_goal_category[i].item()]
+                            _m["next_goal"] = multion_maps.MULTION_REAL_OBJECT_MAP[next_goal_category[i].item()]
                             if self.config.RL.POLICY.EXPLORATION_STRATEGY == "stubborn":
                                 _m["collision_count"] = collision_threshold_steps[i].item()
-                            _m["agent_loc"] = str(agent_locs[i])
-                            _m["goal_loc"] = str(goal_grid[i])
-                            _m["action"] = str(actions[i])
-                            _m["rel_angle"] = str(self.relative_angles[i].item())
-                            _m["stg"] = str(self.stg[i])
+                            _m["total_area"] = self.gt_maps[i,:,:].sum()
+                            cov_area = self.object_maps[i,:,:,0].sum() #self.visited[i,:,:].sum()
+                            _m["visited_area"] = cov_area
+                            _m["coverage_ratio"] = cov_area / self.gt_maps[i,:,:].sum()
                             frame = overlay_frame(frame, _m)
 
                         rgb_frames[i].append(frame)
 
-                    if infos[i]["collisions"]["is_collision"]:
-                        # Build Collision Map
-                        self.collision_map[i, 
-                                           agent_locs[i][0]-1: agent_locs[i][0]+1, 
-                                           agent_locs[i][1]-1: agent_locs[i][1]+1] = 1
-                        self.object_maps[i, 
-                                        agent_locs[i][0]-1: agent_locs[i][0]+1, 
-                                        agent_locs[i][1]-1: agent_locs[i][1]+1, 
-                                        0] = 1
-                        
                     if self.config.RL.POLICY.EXPLORATION_STRATEGY == "stubborn" and infos[i]["collisions"]["is_collision"]:
                         collision_threshold_steps[i] += 1
                     else:
@@ -1715,7 +1585,6 @@ class ShortestPathPlannerMapTrainer(BaseRLTrainer):
                             device=self.device,
                             dtype=torch.long if discrete_actions else torch.float,
                         )
-                        self.acts[i] = []
 
             not_done_masks = not_done_masks.to(device=self.device)
             (
@@ -1747,7 +1616,7 @@ class ShortestPathPlannerMapTrainer(BaseRLTrainer):
                 self.object_maps
             )
 
-        num_episodes = len(stats_episodes)  
+        num_episodes = len(stats_episodes)
         aggregated_stats = {}
         for stat_key in next(iter(stats_episodes.values())).keys():
             aggregated_stats[stat_key] = (
@@ -1821,8 +1690,6 @@ class ShortestPathPlannerMapTrainer(BaseRLTrainer):
         return grid_map
         
     def to_grid(self, xy):
-        # _x = (np.round(xy[:,1] / self.map_resolution) + self.map_center[1]).astype(int)
-        # _y = (np.round(xy[:,0] / self.map_resolution) + self.map_center[0]).astype(int)
         return (np.round(xy / self.map_resolution) + self.map_center).astype(int)
         
     def from_grid(self, grid_x, grid_y):
@@ -1830,359 +1697,3 @@ class ShortestPathPlannerMapTrainer(BaseRLTrainer):
             (grid_x - self.map_center[0]) * self.map_resolution,
             (grid_y - self.map_center[1]) * self.map_resolution,
             ]
-        
-    def get_l2_distance(self, x1, x2, y1, y2):
-        """
-        Computes the L2 distance between two points.
-        """
-        return ((x1 - x2) ** 2 + (y1 - y2) ** 2) ** 0.5
-
-    def _get_stg(self, grid, explored, start, start_o, goal, planning_window):
-
-        [gx1, gx2, gy1, gy2] = planning_window
-
-        x1 = min(start[0], goal[0])
-        x2 = max(start[0], goal[0])
-        y1 = min(start[1], goal[1])
-        y2 = max(start[1], goal[1])
-        dist = self.get_l2_distance(goal[0], start[0], goal[1], start[1])
-        buf = max(20., dist)
-        x1 = max(1, int(x1 - buf))
-        x2 = min(grid.shape[0]-1, int(x2 + buf))
-        y1 = max(1, int(y1 - buf))
-        y2 = min(grid.shape[1]-1, int(y2 + buf))
-
-        rows = explored.sum(1)
-        rows[rows>0] = 1
-        ex1 = np.argmax(rows)
-        ex2 = len(rows) - np.argmax(np.flip(rows))
-
-        cols = explored.sum(0)
-        cols[cols>0] = 1
-        ey1 = np.argmax(cols)
-        ey2 = len(cols) - np.argmax(np.flip(cols))
-
-        ex1 = min(int(start[0]) - 2, ex1)
-        ex2 = max(int(start[0]) + 2, ex2)
-        ey1 = min(int(start[1]) - 2, ey1)
-        ey2 = max(int(start[1]) + 2, ey2)
-
-        x1 = max(x1, ex1)
-        x2 = min(x2, ex2)
-        y1 = max(y1, ey1)
-        y2 = min(y2, ey2)
-
-        # traversible = skimage.morphology.binary_dilation(
-        #                 grid[x1:x2, y1:y2],
-        #                 self.selem_small) != True
-        traversible = grid[x1:x2, y1:y2] != True
-        # traversible[self.collison_map[gx1:gx2, gy1:gy2][x1:x2, y1:y2] == 1] = 0
-        traversible[explored[gx1:gx2, gy1:gy2][x1:x2, y1:y2] == 1] = 1
-
-        traversible[int(start[0]-x1)-1:int(start[0]-x1)+2,
-                    int(start[1]-y1)-1:int(start[1]-y1)+2] = 1
-
-        if goal[0]-2 > x1 and goal[0]+3 < x2\
-            and goal[1]-2 > y1 and goal[1]+3 < y2:
-            traversible[int(goal[0]-x1)-2:int(goal[0]-x1)+3,
-                    int(goal[1]-y1)-2:int(goal[1]-y1)+3] = 1
-        else:
-            goal[0] = min(max(x1, goal[0]), x2)
-            goal[1] = min(max(y1, goal[1]), y2)
-
-        def add_boundary(mat):
-            h, w = mat.shape
-            new_mat = np.ones((h+2,w+2))
-            new_mat[1:h+1,1:w+1] = mat
-            return new_mat
-
-        traversible = add_boundary(traversible)
-
-        planner = FMMPlanner(traversible, 360//self.dt)
-
-        reachable = planner.set_goal([goal[1]-y1+1, goal[0]-x1+1])
-
-        stg_x, stg_y = start[0] - x1 + 1, start[1] - y1 + 1
-        for i in range(self.short_goal_dist):
-            stg_x, stg_y, replan = planner.get_short_term_goal([stg_x, stg_y])
-        if replan:
-            stg_x, stg_y = start[0], start[1]
-        else:
-            stg_x, stg_y = stg_x + x1 - 1, stg_y + y1 - 1
-    
-        stg = np.array([stg_x, stg_y])
-        
-        angle_st_goal = math.degrees(math.atan2(stg_x - start[0],
-                                                stg_y - start[1]))
-        angle_agent = (math.degrees(start_o))%360.0
-        if angle_agent > 180:
-            angle_agent -= 360
-
-        relative_angle = (angle_agent - angle_st_goal)%360.0
-        if relative_angle > 180:
-            relative_angle -= 360
-
-        # if relative_angle > 15.:
-        #     gt_action = 1
-        # elif relative_angle < -15.:
-        #     gt_action = 0
-        # else:
-        #     gt_action = 2
-        if relative_angle > 10.:
-            best_action = HabitatSimActions.TURN_RIGHT
-        elif relative_angle < -10.:
-            best_action = HabitatSimActions.TURN_LEFT
-        else:
-            best_action = HabitatSimActions.MOVE_FORWARD
-
-        return best_action, relative_angle, stg
-
-    def _get_gt_action(self, grid, start, goal, planning_window, start_o):
-        
-        if self.get_l2_distance(start[0], goal[0], start[1], goal[1]) < 3:
-            return HabitatSimActions.STOP, 0.0, goal
-
-        [gx1, gx2, gy1, gy2] = planning_window
-
-        x1 = min(start[0], goal[0])
-        x2 = max(start[0], goal[0])
-        y1 = min(start[1], goal[1])
-        y2 = max(start[1], goal[1])
-        dist = self.get_l2_distance(goal[0], start[0], goal[1], start[1])
-        buf = max(5., dist)
-        x1 = max(0, int(x1 - buf))
-        x2 = min(grid.shape[0], int(x2 + buf))
-        y1 = max(0, int(y1 - buf))
-        y2 = min(grid.shape[1], int(y2 + buf))
-
-        path_found = False
-        goal_r = 0
-        while not path_found:
-            traversible = skimage.morphology.binary_dilation(
-                            grid[gx1:gx2, gy1:gy2][x1:x2, y1:y2],
-                            self.selem) != True
-            traversible[self.visited[gx1:gx2, gy1:gy2][x1:x2, y1:y2] == 1] = 1
-            traversible[int(start[0]-x1)-1:int(start[0]-x1)+2,
-                        int(start[1]-y1)-1:int(start[1]-y1)+2] = 1
-            traversible[int(goal[0]-x1)-goal_r:int(goal[0]-x1)+goal_r+1,
-                        int(goal[1]-y1)-goal_r:int(goal[1]-y1)+goal_r+1] = 1
-            scale = 1
-            planner = FMMPlanner(traversible, 360//self.dt, scale)
-
-            reachable = planner.set_goal([goal[1]-y1, goal[0]-x1])
-
-            stg_x_gt, stg_y_gt = start[0] - x1, start[1] - y1
-            for i in range(1):
-                stg_x_gt, stg_y_gt, replan = \
-                        planner.get_short_term_goal([stg_x_gt, stg_y_gt])
-
-            if replan and buf < 100.:
-                buf = 2*buf
-                x1 = max(0, int(x1 - buf))
-                x2 = min(grid.shape[0], int(x2 + buf))
-                y1 = max(0, int(y1 - buf))
-                y2 = min(grid.shape[1], int(y2 + buf))
-            elif replan and goal_r < 50:
-                goal_r += 1
-            else:
-                path_found = True
-
-        stg_x_gt, stg_y_gt = stg_x_gt + x1, stg_y_gt + y1
-        angle_st_goal = math.degrees(math.atan2(stg_x_gt - start[0],
-                                                stg_y_gt - start[1]))
-        angle_agent = (start_o)%360.0
-        if angle_agent > 180:
-            angle_agent -= 360
-
-        relative_angle = (angle_agent - angle_st_goal)%360.0
-        if relative_angle > 180:
-            relative_angle -= 360
-
-        # if relative_angle > 15.:
-        #     gt_action = 1
-        # elif relative_angle < -15.:
-        #     gt_action = 0
-        # else:
-        #     gt_action = 2
-        if relative_angle > 10.:
-            best_action = HabitatSimActions.TURN_RIGHT
-        elif relative_angle < -10.:
-            best_action = HabitatSimActions.TURN_LEFT
-        else:
-            best_action = HabitatSimActions.MOVE_FORWARD
-
-        return best_action
-
-    def plan_path(self, agent_loc, goal_loc, theta, i):
-        goal_loc = goal_loc.long().cpu().numpy()
-        if self.get_l2_distance(agent_loc[0], goal_loc[0], agent_loc[1], goal_loc[1]) < 3:
-            return HabitatSimActions.STOP, 0.0, goal_loc
-        
-        start = self.map_center
-        
-        ws = 3
-        obstacle = self.object_maps[i, :, :, 0].cpu().numpy() # built obstacle map
-        # obstacle += self.collision_map[i].cpu().numpy()
-        #traversible = skimage.morphology.binary_dilation(obstacle, self.selem_small) != True
-        traversible = (obstacle != True)
-    
-        planner = FMMPlanner(traversible, 
-                                num_rots=360//self.config.TASK_CONFIG.SIMULATOR.TURN_ANGLE, 
-                                step_size=1)
-        reachable = planner.set_goal(goal_loc)
-        
-        self.fmm_dist = planner.fmm_dist*1
-        
-        # paths = []
-        # cost = self.fmm_dist[agent_loc[0], agent_loc[1]]
-        
-        # loc = agent_loc
-        # paths.append(loc)
-        
-        # while cost > 0 and len(paths) <= 3:
-        #     planning_window = self.fmm_dist[loc[0]-1: loc[0]+2, loc[1]-1: loc[1]+2]
-        #     cost = np.min(planning_window)
-        #     loc = np.array(np.unravel_index(np.argmin(planning_window), planning_window.shape)) + loc
-        #     paths.append(loc)
-        
-        self.fmm_dist[agent_loc[0], agent_loc[1]] = 200 # so that the current agent location is not selected as stg
-        planning_window = self.fmm_dist[agent_loc[0]-ws: agent_loc[0]+ws+1, 
-                                        agent_loc[1]-ws: agent_loc[1]+ws+1]
-        cost = np.min(planning_window)
-        short_term_goal = np.array(np.unravel_index(np.argmin(planning_window), planning_window.shape)) + agent_loc
-        # short_term_goal = np.array([125.,130])
-        
-        angle_st_goal = math.degrees(math.atan2(short_term_goal[0] - agent_loc[0],
-                                                short_term_goal[1] - agent_loc[1]))
-        angle_agent = (np.rad2deg(theta))%360.0
-        if angle_agent > 180:
-            angle_agent -= 360
-
-        relative_angle = (angle_agent - angle_st_goal)%360.0
-        if relative_angle > 180:
-            relative_angle -= 360
-
-        if relative_angle > 10.:
-            best_action = HabitatSimActions.TURN_RIGHT
-        elif relative_angle < -10.:
-            best_action = HabitatSimActions.TURN_LEFT
-        else:
-            best_action = HabitatSimActions.MOVE_FORWARD
-
-        
-        # ag_theta = np.rad2deg(theta)
-        # # print('-----------------agent:',str(agent_loc),':theta=',str(theta),'(',ag_theta,'):::short_term_goal=',str(short_term_goal))
-        # goal_angle = math.atan2(short_term_goal[0] - start[0], short_term_goal[1] - start[1])
-        # # print('-----------------------------goal_angle=',goal_angle)
-        # goal_angle = np.rad2deg(goal_angle) % 360
-        # # print('-----------------------------np.rad2deg(goal_angle) % 360=',goal_angle)
-
-        # goal_angle -= round(ag_theta)
-        # # print('-----------------------------goal_angle -= round(ag_theta)=',goal_angle)
-        # relative_angle = goal_angle % 360
-        # # print('-----------------------------relative_angle=goal_angle % 360=',relative_angle)
-        
-        # if relative_angle <= 10.0 or relative_angle >= 350.0:
-        #     best_action = HabitatSimActions.MOVE_FORWARD
-        # elif relative_angle < 180.0:
-        #     best_action = HabitatSimActions.TURN_LEFT
-        # else:
-        #     best_action = HabitatSimActions.TURN_RIGHT
-            
-        # print('-----------------------------best_action=',best_action)
-            
-        # angle_st_goal = math.degrees(math.atan2(agent_loc[0]-short_term_goal[0],
-        #                                         agent_loc[1]-short_term_goal[1]))
-            
-        # angle_agent = math.degrees(theta)
-        # relative_angle = (angle_agent-angle_st_goal)%360.0
-        
-        # # if relative_angle > 180:
-        # #     relative_angle -= 360
-            
-        # # angle_agent = angle_agent%360.0
-        # # if angle_agent > 180:
-        # #     angle_agent -= 360
-        
-        # if relative_angle > self.config.TASK_CONFIG.SIMULATOR.TURN_ANGLE:
-        #     best_action = HabitatSimActions.TURN_LEFT
-        # elif relative_angle < -self.config.TASK_CONFIG.SIMULATOR.TURN_ANGLE:
-        #     best_action = HabitatSimActions.TURN_RIGHT
-        # else:
-        #     best_action = HabitatSimActions.MOVE_FORWARD
-        
-        return best_action, relative_angle, short_term_goal
-    
-    def plan_path_orig(self, agent_loc, goal_loc, theta, i):
-        if agent_loc[0] == goal_loc[0] and agent_loc[1] == goal_loc[1]:
-            return HabitatSimActions.STOP, [HabitatSimActions.STOP]
-        
-        state = [agent_loc[0], agent_loc[1], theta]
-        # state[:2] = state[:2]/self.resolution
-        
-        obstacle = self.object_maps[i, :, :, 0].cpu().numpy() # built obstacle map
-        #traversible = skimage.morphology.binary_dilation(obstacle, self.selem) != True
-        traversible = skimage.morphology.binary_dilation(obstacle, self.selem_small) != True
-        # if self.mark_locs:
-        #     traversible_locs = skimage.morphology.binary_dilation(self.loc_on_map, self.selem) == True
-        #     traversible = np.logical_or(traversible_locs, traversible)
-    
-        if False: #self.close_small_openings:
-            n = self.num_erosions
-            reachable = False
-            while n >= 0 and not reachable:
-                traversible_open = traversible.copy()
-                for i in range(n):
-                    traversible_open = skimage.morphology.binary_erosion(traversible_open, self.selem_small)
-                for i in range(n):
-                    traversible_open = skimage.morphology.binary_dilation(traversible_open, self.selem_small)
-                planner = FMMPlanner(traversible_open, 
-                                    num_rots=360//self.config.TASK_CONFIG.SIMULATOR.TURN_ANGLE, 
-                                    step_size=1)
-                # goal_loc_int = goal_loc // self.resolution
-                # goal_loc_int = goal_loc_int.astype(np.int32)
-                reachable = planner.set_goal(goal_loc)
-                reachable = reachable[int(round(state[1])), int(round(state[0]))]
-                n = n-1
-        else:
-            planner = FMMPlanner(traversible, 
-                                 num_rots=360//self.config.TASK_CONFIG.SIMULATOR.TURN_ANGLE, 
-                                 step_size=1)
-            # goal_loc_int = goal_loc // self.resolution
-            # goal_loc_int = goal_loc_int.astype(np.int32)
-            reachable = planner.set_goal(goal_loc)
-        self.fmm_dist = planner.fmm_dist*1
-        a, state, act_seq = planner.get_action(state)
-        # for i in range(len(act_seq)):
-        #     if act_seq[i] == 3:
-        #         act_seq[i] = HabitatSimActions.MOVE_FORWARD
-        #     elif act_seq[i] == 0:
-        #         act_seq[i] = HabitatSimActions.STOP
-        #     elif act_seq[i] == 1:
-        #         act_seq[i] = HabitatSimActions.TURN_LEFT
-        #     elif act_seq[i] == 2:
-        #         act_seq[i] = HabitatSimActions.TURN_RIGHT
-        best_action = a
-        if a == 3:
-            best_action = HabitatSimActions.MOVE_FORWARD
-        elif a == 0:
-            best_action = HabitatSimActions.STOP
-        elif a == 1:
-            best_action = HabitatSimActions.TURN_LEFT
-        elif a == 2:
-            best_action = HabitatSimActions.TURN_RIGHT
-        return best_action, act_seq
-    
-    def check_thrashing(self, n, acts):
-        thrashing = False
-        if len(acts) > n:
-            last_act = acts[-1]
-            thrashing = last_act == HabitatSimActions.TURN_LEFT or last_act == HabitatSimActions.TURN_RIGHT
-            for i in range(2, n+1):
-                if thrashing:
-                    thrashing = ((acts[-i] == HabitatSimActions.TURN_RIGHT and last_act == HabitatSimActions.TURN_LEFT)
-                                 or (acts[-i] == HabitatSimActions.TURN_LEFT and last_act == HabitatSimActions.TURN_RIGHT))
-                    last_act = acts[-i]
-                else:
-                    break
-        return thrashing
