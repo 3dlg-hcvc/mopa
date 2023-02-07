@@ -203,6 +203,7 @@ class BaselinePolicyNonOracle(PolicyNonOracle):
         coordinate_min,
         coordinate_max,
         map_config,
+        config,
         hidden_size=512,
     ):
         super().__init__(
@@ -221,6 +222,7 @@ class BaselinePolicyNonOracle(PolicyNonOracle):
                 coordinate_min=coordinate_min,
                 coordinate_max=coordinate_max,
                 map_config=map_config,
+                config=config,
             ),
             action_space.n,
         )
@@ -232,7 +234,8 @@ class BaselineNetNonOracle(Net):
 
     def __init__(self, batch_size, observation_space, hidden_size, goal_sensor_uuid, device, 
         object_category_embedding_size, previous_action_embedding_size, use_previous_action,
-        egocentric_map_size, global_map_size, global_map_depth, coordinate_min, coordinate_max, map_config
+        egocentric_map_size, global_map_size, global_map_depth, coordinate_min, coordinate_max, map_config,
+        config
     ):
         super().__init__()
         self.goal_sensor_uuid = goal_sensor_uuid
@@ -247,10 +250,16 @@ class BaselineNetNonOracle(Net):
         self.global_map_size = global_map_size
         self.global_map_depth = global_map_depth
         self.local_map_size = map_config.local_map_size
+        self.config = config
 
         self.visual_encoder = RGBCNNNonOracle(observation_space, hidden_size, self.global_map_depth)
         self.map_encoder = MapCNN(self.local_map_size, 256, "non-oracle", _n_input_map=self.global_map_depth)        
 
+        # self.projection = Projection(config=self.config, egocentric_map_size=egocentric_map_size, 
+        #                             global_map_size=global_map_size, 
+        #                             device=device, coordinate_min=coordinate_min, 
+        #                             coordinate_max=coordinate_max
+        # )
         self.projection = Projection(egocentric_map_size, global_map_size, 
             device, coordinate_min, coordinate_max
         )
@@ -272,7 +281,7 @@ class BaselineNetNonOracle(Net):
                 (0 if self.is_blind else self._hidden_size) + object_category_embedding_size,
                 self._hidden_size,   #Replace 2 by number of target categories later
             )
-        self.goal_embedding = nn.Embedding(8, object_category_embedding_size)
+        self.goal_embedding = nn.Embedding(9, object_category_embedding_size)
         self.action_embedding = nn.Embedding(4, previous_action_embedding_size)
         self.full_global_map = torch.zeros(
             batch_size,
@@ -306,9 +315,9 @@ class BaselineNetNonOracle(Net):
         if not self.is_blind:
             perception_embed = self.visual_encoder(observations)
         # interpolated_perception_embed = F.interpolate(perception_embed, scale_factor=256./28., mode='bilinear')
-        projection = self.projection.forward(perception_embed, observations['depth'] * 10, -(observations["compass"]))
+        projection = self.projection.forward(perception_embed, observations['depth'] * 10, -(observations["episodic_compass"]))
         perception_embed = self.image_features_linear(self.flatten(perception_embed))
-        grid_x, grid_y = self.to_grid.get_grid_coords(observations['gps'])
+        grid_x, grid_y = self.to_grid.get_grid_coords(observations['episodic_gps'])
         # grid_x_coord, grid_y_coord = grid_x.type(torch.uint8), grid_y.type(torch.uint8)
         bs = global_map.shape[0]
         ##forward pass specific
@@ -328,7 +337,7 @@ class BaselineNetNonOracle(Net):
             st_pose = torch.cat(
                 [-(grid_y.unsqueeze(1)-(self.global_map_size//2))/(self.global_map_size//2),
                  -(grid_x.unsqueeze(1)-(self.global_map_size//2))/(self.global_map_size//2), 
-                 observations['compass']], 
+                 observations['episodic_compass']], 
                  dim=1
             )
             rot_mat, trans_mat = get_grid(st_pose, agent_view.size(), self.device)
@@ -339,7 +348,7 @@ class BaselineNetNonOracle(Net):
                 [
                     (grid_y.unsqueeze(1)-(self.global_map_size//2))/(self.global_map_size//2),
                     (grid_x.unsqueeze(1)-(self.global_map_size//2))/(self.global_map_size//2),
-                    torch.zeros_like(observations['compass'])
+                    torch.zeros_like(observations['episodic_compass'])
                     ],
                     dim=1
                 )
@@ -349,7 +358,7 @@ class BaselineNetNonOracle(Net):
                 self.global_map_size//2-math.floor(self.local_map_size/2):self.global_map_size//2+math.ceil(self.local_map_size/2), 
                 self.global_map_size//2-math.floor(self.local_map_size/2):self.global_map_size//2+math.ceil(self.local_map_size/2)
             ]
-            final_retrieval = self.rotate_tensor.forward(translated_retrieval, observations["compass"])
+            final_retrieval = self.rotate_tensor.forward(translated_retrieval, observations["episodic_compass"])
 
             global_map_embed = self.map_encoder(final_retrieval.permute(0, 2, 3, 1))
 

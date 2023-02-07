@@ -38,7 +38,7 @@ from habitat_baselines.common.tensorboard_utils import (
     get_writer
 )
 from habitat_baselines.utils.common import (
-    batch_obs,
+    # batch_obs,
     generate_video,
     linear_decay,
     action_array_to_dict,
@@ -76,6 +76,42 @@ from habitat_baselines.common.obs_transformers import (
 from habitat_baselines.common.base_trainer import BaseRLTrainer
 from habitat_baselines.rl.ppo.policy import NetPolicy
 
+def batch_obs(
+    observations: List[Dict], device: Optional[torch.device] = None
+) -> Dict[str, torch.Tensor]:
+    r"""Transpose a batch of observation dicts to a dict of batched
+    observations.
+
+    Args:
+        observations:  list of dicts of observations.
+        device: The torch.device to put the resulting tensors on.
+            Will not move the tensors if None
+
+    Returns:
+        transposed dict of lists of observations.
+    """
+    batch = defaultdict(list)
+
+    for obs in observations:
+        for sensor in obs:
+            batch[sensor].append(_to_tensor(obs[sensor]))
+
+    for sensor in batch:
+        batch[sensor] = (
+            torch.stack(batch[sensor], dim=0)
+            .to(device=device)
+            .to(dtype=torch.float)
+        )
+
+    return batch
+
+def _to_tensor(v):
+    if torch.is_tensor(v):
+        return v
+    elif isinstance(v, np.ndarray):
+        return torch.from_numpy(v)
+    else:
+        return torch.tensor(v, dtype=torch.float)
 
 @baseline_registry.register_trainer(name="non-oracle")
 class PPOTrainerNO(BaseRLTrainerNonOracle):
@@ -122,6 +158,7 @@ class PPOTrainerNO(BaseRLTrainerNonOracle):
             coordinate_min=self.config.RL.MAPS.coordinate_min,
             coordinate_max=self.config.RL.MAPS.coordinate_max,
             map_config=self.config.RL.MAPS,
+            config=self.config
         )
         self.actor_critic.to(self.device)
 
