@@ -5,3 +5,4 @@
 # LICENSE file in the root directory of this source tree.
 
 from .resnet_policy import PointNavResNetPolicy  # noqa: F401.
+from .objrecog_resnet_policy import ObjRecogResNetPolicy

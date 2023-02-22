@@ -10,10 +10,10 @@ from habitat_baselines.rl.ppo.policy import (
     PointNavBaselinePolicy,
     Policy,
 )
-from baselines.rl.ppo.ppo import PPO
+from baselines.rl.ppo.ppo import PPO, ObjRecogPPO
 from baselines.rl.ppo.ppo import PPONonOracle, PPOOracle
-from baselines.rl.ppo.policy import BaselinePolicyNonOracle, BaselinePolicyOracle, HierNetPolicy
+from baselines.rl.ppo.policy import BaselinePolicyNonOracle, BaselinePolicyOracle, HierNetPolicy, MapNetPolicy
 
 __all__ = ["PPO", "Policy", "NetPolicy", "Net", "PointNavBaselinePolicy", 
            "PPONonOracle", "PPOOracle", "BaselinePolicyNonOracle", "BaselinePolicyOracle",
-           "HierNetPolicy"]
+           "HierNetPolicy", "MapNetPolicy"]

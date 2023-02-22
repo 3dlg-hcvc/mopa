@@ -42,6 +42,8 @@ class MultiObjectGoalSensor(Sensor):
         of categories id to text mapping.
     """
 
+    cls_uuid: str = "multiobjectgoal"
+    
     def __init__(
         self, sim, config: Config, dataset: Dataset, *args: Any, **kwargs: Any
     ):
@@ -50,7 +52,7 @@ class MultiObjectGoalSensor(Sensor):
         super().__init__(config=config)
 
     def _get_uuid(self, *args: Any, **kwargs: Any):
-        return "multiobjectgoal"
+        return self.cls_uuid
 
     def _get_sensor_type(self, *args: Any, **kwargs: Any):
         return SensorTypes.SEMANTIC
