@@ -79,7 +79,17 @@ class ObjectDetector():
             # prediction = self.model(img_trans)
             
             imgs = (images.type(torch.float32) / 255.0).permute(0,3,1,2)
-            prediction = self.model(imgs)
+            bs = imgs.shape[0]
+            if bs > 16:
+                prediction = []
+                for i in range(bs//16):
+                    p = self.model(imgs[(i*16): (i+1)*16])
+                    prediction.extend(p)
+                if (bs % 16) > 0:
+                    p = self.model(imgs[(i*16): ])
+                    prediction.extend(p)
+            else:
+                prediction = self.model(imgs)
             
             nms_prediction = [self.apply_nms(p, iou_thresh=0.2) for p in prediction]
             res = [self.filter_pred(n, images[i].cpu().numpy()) for i, n in enumerate(nms_prediction)]
