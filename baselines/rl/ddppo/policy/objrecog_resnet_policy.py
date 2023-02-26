@@ -357,6 +357,17 @@ class ObjRecogResNetNet(Net):
                 
             self.map_encoder = MapCNN(self.map_size, self.enc_output_size, agent_type="obj-recog", _n_input_map=32)
             rnn_input_size += self.enc_output_size
+            
+            # Occupancy embedding on the map
+            self.occ_embedding = nn.Embedding(3, 32)    # 0,1,2 -> unobserved, occupied, not occupied
+            self.occ_map_encoder = MapCNN(self.map_size, self.enc_output_size, agent_type="obj-recog", _n_input_map=32)
+            rnn_input_size += self.enc_output_size
+            
+            # Agent position embedding on the map
+            self.object_padding = 1
+            self.agent_pos_embedding = nn.Embedding(2, 32)    # 0,1 -> not occupied, occupied
+            self.agent_pos_encoder = MapCNN(self.map_size, self.enc_output_size, agent_type="obj-recog", _n_input_map=32)
+            rnn_input_size += self.enc_output_size
 
         if EpisodicGPSSensor.cls_uuid in observation_space.spaces:
             input_gps_dim = observation_space.spaces[
@@ -581,18 +592,39 @@ class ObjRecogResNetNet(Net):
             
             bs = multi_object_goal.shape[0]
             global_map_embedding = []
+            global_occ_map_embedding = []
+            agent_position_embedding = []
             
             if "pred_labels" in self.policy_config and self.policy_config.pred_labels:
                 object_map = self.build_map(observations, object_map)
                 global_object_map = object_map[:, :, :, 1].type(torch.long)
+                global_occ_map = object_map[:, :, :, 0].type(torch.long)
+                agent_pos_map = object_map[:, :, :, 2].type(torch.long)
             else:
-                global_object_map = observations["object_map"][:, :, :, 1]
+                _map = observations["object_map"]
+                global_object_map = _map[:, :, :, 1]
+                global_occ_map = _map[:, :, :, 0]
+                agent_pos_map = _map[:, :, :, 2]
                 
             global_map_embedding.append(self.object_embedding(global_object_map.view(-1))
                                             .view(bs, self.map_size, self.map_size, -1))
             global_map_embedding = torch.cat(global_map_embedding, dim=3)
             map_embed = self.map_encoder(global_map_embedding)
             x.append(map_embed.squeeze(dim=1))
+            
+            # Occupancy encoder
+            global_occ_map_embedding.append(self.occ_embedding(global_occ_map.view(-1))
+                                            .view(bs, self.map_size, self.map_size, -1))
+            global_occ_map_embedding = torch.cat(global_occ_map_embedding, dim=3)
+            occ_map_embed = self.occ_map_encoder(global_occ_map_embedding)
+            x.append(occ_map_embed.squeeze(dim=1))
+            
+            # Agent position encoder
+            agent_position_embedding.append(self.agent_pos_embedding(global_occ_map.view(-1))
+                                            .view(bs, self.map_size, self.map_size, -1))
+            agent_position_embedding = torch.cat(agent_position_embedding, dim=3)
+            agent_pos_embed = self.agent_pos_encoder(agent_position_embedding)
+            x.append(agent_pos_embed.squeeze(dim=1))
 
         if EpisodicCompassSensor.cls_uuid in observations:
             compass_observations = torch.stack(
@@ -675,8 +707,12 @@ class ObjRecogResNetNet(Net):
         
         coords = self._unproject_to_world(depth, location, theta)
         grid_map = self._add_to_map(coords, semantic, object_map.cpu().numpy())
-        _agent_locs = self.to_grid(location)
+        agent_locs = self.to_grid(location)
         object_map[:, :, :, :2] = torch.tensor(grid_map)[:, :, :, :2]
+        
+        # mark agent
+        object_map[:, :, :, 2] = 0
+        object_map[:,agent_locs[:,0],agent_locs[:,1],2] = 1
         
         return object_map  #, _agent_locs, semantic
     
