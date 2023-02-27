@@ -86,7 +86,7 @@ class ObjectDetector():
                     p = self.model(imgs[(i*16): (i+1)*16])
                     prediction.extend(p)
                 if (bs % 16) > 0:
-                    p = self.model(imgs[(i*16): ])
+                    p = self.model(imgs[((i+1)*16): ])
                     prediction.extend(p)
             else:
                 prediction = self.model(imgs)
