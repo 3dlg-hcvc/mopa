@@ -719,7 +719,7 @@ class ObjectMapSensor(Sensor):
         # Mark the agent location
         object_map[max(0, agent_loc[0]-self.object_padding):min(top_down_map.shape[0], agent_loc[0]+self.object_padding),
                     max(0, agent_loc[1]-self.object_padding):min(top_down_map.shape[1], agent_loc[1]+self.object_padding),
-                    self.channel_num+1] = 10 #len(kwargs['task'].object_to_datset_mapping) + self.object_ind_offset
+                    self.channel_num+1] = 1 #10 #len(kwargs['task'].object_to_datset_mapping) + self.object_ind_offset
         
 
         # Mask the map
