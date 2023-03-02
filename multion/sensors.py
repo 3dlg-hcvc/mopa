@@ -719,7 +719,7 @@ class ObjectMapSensor(Sensor):
         # Mark the agent location
         object_map[max(0, agent_loc[0]-self.object_padding):min(top_down_map.shape[0], agent_loc[0]+self.object_padding),
                     max(0, agent_loc[1]-self.object_padding):min(top_down_map.shape[1], agent_loc[1]+self.object_padding),
-                    self.channel_num+1] = 1 #10 #len(kwargs['task'].object_to_datset_mapping) + self.object_ind_offset
+                    self.channel_num+1] = 11 #len(kwargs['task'].object_to_datset_mapping) + self.object_ind_offset
         
 
         # Mask the map
@@ -753,6 +753,11 @@ class ObjectMapSensor(Sensor):
                                 kwargs['task'].object_to_datset_mapping[episode.goals[i].object_category]
                                 + self.object_ind_offset
                             )
+            # Mark current goal            
+            # if i == kwargs["task"].current_goal_index:
+            #     object_map[grid_loc[0]-self.object_padding:grid_loc[0]+self.object_padding, 
+            #             grid_loc[1]-self.object_padding:grid_loc[1]+self.object_padding,
+            #             self.channel_num+2] = 12
 
         for i in range(len(episode.distractors)):
             loc0 = episode.distractors[i].position[0]

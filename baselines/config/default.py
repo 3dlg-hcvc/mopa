@@ -71,6 +71,7 @@ _C.EVAL.SHOULD_LOAD_CKPT = True
 # -----------------------------------------------------------------------------
 _C.RL = CN()
 _C.RL.REWARD_MEASURE = "distance_to_currgoal"
+_C.RL.REWARD_MEASURE_MULTI_GOAL = "distance_to_multi_goal"
 _C.RL.SUCCESS_MEASURE = "success"
 _C.RL.SUCCESS_REWARD_MEASURE = "mspl"
 _C.RL.SUBSUCCESS_MEASURE = "sub_success"

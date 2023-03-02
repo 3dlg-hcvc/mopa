@@ -14,7 +14,7 @@ from typing import Optional, Type, Union, Dict, Any
 
 import numpy as np
 import habitat
-from habitat import Config, Dataset
+from habitat import Config, Dataset, logger
 from habitat.datasets import make_dataset
 from habitat_baselines.common.baseline_registry import baseline_registry
 from habitat.core.registry import registry
@@ -37,6 +37,7 @@ class MultiObjNavRLEnv(habitat.RLEnv):
         self._rl_config = config.RL
         self._core_env_config = config.TASK_CONFIG
         self._reward_measure_name = self._rl_config.REWARD_MEASURE
+        self._reward_measure_multi_goal_name = self._rl_config.REWARD_MEASURE_MULTI_GOAL
         self._success_measure_name = self._rl_config.SUCCESS_MEASURE
         self._subsuccess_measure_name = self._rl_config.SUBSUCCESS_MEASURE
         self._success_reward_measure_name = self._rl_config.SUCCESS_REWARD_MEASURE
@@ -134,40 +135,81 @@ class MultiObjNavRLEnv(habitat.RLEnv):
         )
 
     def get_reward(self, observations, **kwargs):
-        if (self._episode_subsuccess()
+        if self._new_reward_structure:
+            if (self._episode_subsuccess()
                 and not self._episode_success()
             ):
-            self._env.task.measurements.measures[self._reward_measure_name].update_metric(
-                episode=self.current_episode, task=self._env.task
-            )
+                self._env.task.measurements.measures[self._reward_measure_name].update_metric(
+                    episode=self.current_episode, task=self._env.task
+                )
+                
+            reward = self._rl_config.SLACK_REWARD
+            logger.info(f"Slack={reward}")
+
+            current_measure = self._env.get_metrics()[self._reward_measure_name]
+
+            if self._episode_subsuccess():
+                current_measure = self._env.task.foundDistance
+
+            # Current-goal distance based reward
+            reward -= current_measure
+            logger.info(f"Distance reward=-{current_measure}")
             
-        reward = self._rl_config.SLACK_REWARD
+            # Multi-goal distance based reward
+            current_multi_goal_measure = self._env.get_metrics()[self._reward_measure_multi_goal_name]
+            reward -= current_multi_goal_measure
+            logger.info(f"Multi-Distance reward=-{current_multi_goal_measure}")
 
-        current_measure = self._env.get_metrics()[self._reward_measure_name]
-
-        if self._episode_subsuccess():
-            current_measure = self._env.task.foundDistance
-
-        reward += self._previous_measure - current_measure
-        self._previous_measure = current_measure
-
-        if self._episode_subsuccess():
-            self._previous_measure = self._env.get_metrics()[self._reward_measure_name]
-
-        if self._episode_success():
-            if self._new_reward_structure:
-                # Success reward depends on SPL to encourage reaching final goal while taking shorter path
-                reward += (self._rl_config.SUCCESS_REWARD * self._env.get_metrics()[self._success_reward_measure_name])
-            else:
+            if self._episode_success():
                 reward += self._rl_config.SUCCESS_REWARD
-        if self._episode_subsuccess():
-            if self._new_reward_structure:
-                # Sub-success reward depends on PSPL to encourage reaching all goals while taking shorter path
-                reward += (self._rl_config.SUBSUCCESS_REWARD * self._env.get_metrics()[self._subsuccess_reward_measure_name])
-            else:
+                logger.info(f"Success reward={self._rl_config.SUCCESS_REWARD}")
+            
+            # Encourage success
+            reward += self._env.get_metrics()[self._success_reward_measure_name]
+            logger.info(f"Dense reward based on {self._success_reward_measure_name}={self._env.get_metrics()[self._success_reward_measure_name]}")
+            
+            if self._episode_subsuccess():
                 reward += self._rl_config.SUBSUCCESS_REWARD
-        if self._env.task.is_found_called and self._rl_config.FALSE_FOUND_PENALTY:
-            reward -= self._rl_config.FALSE_FOUND_PENALTY_VALUE
+                logger.info(f"Sub-success reward={self._rl_config.SUBSUCCESS_REWARD}")
+                
+            # Encourage progress
+            reward += self._env.get_metrics()[self._subsuccess_reward_measure_name]
+            logger.info(f"Dense reward based on {self._subsuccess_reward_measure_name}={self._env.get_metrics()[self._subsuccess_reward_measure_name]}")
+                
+            if self._env.task.is_found_called and self._rl_config.FALSE_FOUND_PENALTY:
+                reward -= self._rl_config.FALSE_FOUND_PENALTY_VALUE
+                logger.info(f"False Found=-{self._rl_config.FALSE_FOUND_PENALTY_VALUE}")
+            
+        else:
+            if (self._episode_subsuccess()
+                    and not self._episode_success()
+                ):
+                self._env.task.measurements.measures[self._reward_measure_name].update_metric(
+                    episode=self.current_episode, task=self._env.task
+                )
+                
+            reward = self._rl_config.SLACK_REWARD
+            logger.info(f"Slack={reward}")
+
+            current_measure = self._env.get_metrics()[self._reward_measure_name]
+
+            if self._episode_subsuccess():
+                current_measure = self._env.task.foundDistance
+
+            reward += self._previous_measure - current_measure
+            logger.info(f"Distance reward={self._previous_measure - current_measure}")
+            self._previous_measure = current_measure
+
+            if self._episode_subsuccess():
+                self._previous_measure = self._env.get_metrics()[self._reward_measure_name]
+
+            if self._episode_success():
+                reward += self._rl_config.SUCCESS_REWARD
+            if self._episode_subsuccess():
+                reward += self._rl_config.SUBSUCCESS_REWARD
+            if self._env.task.is_found_called and self._rl_config.FALSE_FOUND_PENALTY:
+                reward -= self._rl_config.FALSE_FOUND_PENALTY_VALUE
+                logger.info(f"False Found=-{self._rl_config.FALSE_FOUND_PENALTY_VALUE}")
 
         return reward
     
