@@ -150,15 +150,13 @@ class MultiObjNavRLEnv(habitat.RLEnv):
 
             if self._episode_subsuccess():
                 current_measure = self._env.task.foundDistance
+                
+            reward += self._previous_measure - current_measure
+            logger.info(f"Distance reward={self._previous_measure - current_measure}")
+            self._previous_measure = current_measure
 
-            # Current-goal distance based reward
-            reward -= current_measure
-            logger.info(f"Distance reward=-{current_measure}")
-            
-            # Multi-goal distance based reward
-            current_multi_goal_measure = self._env.get_metrics()[self._reward_measure_multi_goal_name]
-            reward -= current_multi_goal_measure
-            logger.info(f"Multi-Distance reward=-{current_multi_goal_measure}")
+            if self._episode_subsuccess():
+                self._previous_measure = self._env.get_metrics()[self._reward_measure_name]
 
             if self._episode_success():
                 reward += self._rl_config.SUCCESS_REWARD

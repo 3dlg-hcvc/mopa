@@ -1,20 +1,20 @@
 VERBOSE: False
-BASE_TASK_CONFIG_PATH: "multion/config/tasks/multion_1on_objrecog_ora_map.yaml"
+BASE_TASK_CONFIG_PATH: "multion/config/tasks/multion_1on_objrecog_ora_map_small.yaml"
 TRAINER_NAME: "objrecog"
 ENV_NAME: "NavRLEnv"
 SIMULATOR_GPU_ID: 0
 TORCH_GPU_ID: 0
 VIDEO_OPTION: []
-TENSORBOARD_DIR: "experiments/end_to_end/objrecogmap/w_ora_map/debug/eval_hm3d_tb"
-RESULTS_DIR: "experiments/end_to_end/objrecogmap/w_ora_map/debug/results"
-VIDEO_DIR: "experiments/end_to_end/objrecogmap/w_ora_map/debug/video_dir"
+TENSORBOARD_DIR: "experiments/end_to_end/objrecogmap/w_ora_map/debug/new_reward/eval_hm3d_tb"
+RESULTS_DIR: "experiments/end_to_end/objrecogmap/w_ora_map/debug/new_reward/results"
+VIDEO_DIR: "experiments/end_to_end/objrecogmap/w_ora_map/debug/new_reward/video_dir"
 VIDEO_RENDER_ALL_INFO: True
 TEST_EPISODE_COUNT: 20
 EVAL_CKPT_PATH_DIR: "data/hm3d_ddppo_pointnav_baselines_v1/hm3d-depth/ckpt.60.pth"
 NUM_ENVIRONMENTS: 2
 SENSORS: ["RGB_SENSOR", "DEPTH_SENSOR", "SEMANTIC_SENSOR"]
-CHECKPOINT_FOLDER: "experiments/end_to_end/objrecogmap/w_ora_map/debug/checkpoints"
-LOG_FILE: "experiments/end_to_end/objrecogmap/w_ora_map/debug/eval_hm3d.log"
+CHECKPOINT_FOLDER: "experiments/end_to_end/objrecogmap/w_ora_map/debug/new_reward/checkpoints"
+LOG_FILE: "experiments/end_to_end/objrecogmap/w_ora_map/debug/new_reward/eval_hm3d.log"
 NUM_UPDATES: -1
 TOTAL_NUM_STEPS: 2.5e9
 LOG_INTERVAL: 10
@@ -30,14 +30,14 @@ EVAL:
 
 RL:
   NEW_REWARD_STRUCTURE: True
-  SUCCESS_REWARD: 2.5
-
+  
   MAP:
     map_size: 250
-    map_depth: 4
+    map_depth: 3
     map_resolution: 0.2
     meters_covered: 50
     enc_output_size: 64
+    object_ind_offset: 2
     
   POLICY:
     name: "ObjRecogResNetPolicy"
@@ -61,7 +61,7 @@ RL:
     lr: 2.5e-4
     eps: 1e-5
     max_grad_norm: 0.2
-    num_steps: 32
+    num_steps: 64
     use_gae: True
     gamma: 0.99
     tau: 0.95
