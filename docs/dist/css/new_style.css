@@ -1,0 +1,53 @@
+
+.gif-img-caption{
+  font-size: 18px;
+  font-weight: bold;
+  color: rgba(63, 62, 62, 0.747);
+}
+
+.goal-img{
+  font-size: 15px;
+  font-weight: bold;
+  color: rgba(63, 62, 62, 0.747);
+}
+
+.goal-img .img-thumbnail {
+  border:0;
+  box-shadow:0;
+  border-radius:0;
+}
+
+iframe{
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+}
+
+#organizers-container {
+    display: flex;
+    justify-content: space-evenly;
+    flex-wrap: wrap;
+}
+
+#organizers-column {
+    width: 20%;
+}
+
+.dates-table {
+    width: 70%;
+    text-align:left;
+}
+
+.btn {
+  font-size: 16px;
+  font-weight: bold;
+}
+
+.dropdown-menu {
+  min-width: 95px;
+  text-align: center;
+  font-size: 16px;
+  font-weight: bold;
+}

@@ -24,7 +24,7 @@ new_checkpoints/
 tb/
 build/
 develop-eggs/
-dist/
+# dist/
 downloads/
 eggs/
 .eggs/
