@@ -21,7 +21,7 @@ conda create -n mon python=3.8 cmake=3.14.0
 conda activate mon
 ```
 
-This code uses forked versions of [habitat-sim](https://github.com/sonia-raychaudhuri/habitat-sim) and [habitat-lab]([https://github.com/facebookresearch/](https://github.com/sonia-raychaudhuri/habitat-lab). 
+This code uses forked versions of [habitat-sim](https://github.com/sonia-raychaudhuri/habitat-sim) and [habitat-lab](https://github.com/sonia-raychaudhuri/habitat-lab). 
 
 #### Installing habitat-sim:
 
