@@ -54,7 +54,7 @@
 
                 <div class="row">
                     <h2>Abstract</h2>
-                    <div class="text-justify">
+                    <div class="col-lg-12 col-md-12 col-sm-12 col-xs-12 text-justify">
                         <p>
                             Our work focuses on the Multi-Object Navigation (MultiON) task, where an agent needs to
                             navigate to
@@ -85,96 +85,141 @@
                 <div class="row">
                     <h2>Approach: Modular-MON</h2>
                     &nbsp;
-                    <img class="intro-image" src="images/architecture.png" />
-                    In the MultiON task, the agent is given the current goal
-                    gi from a set of N goals {g1, g2, ..., gN }. Once the agent has
-                    reached gi and generated the Found action successfully, it is
-                    given the next goal gi+1. This continues until the agent has
-                    found all the goals in the episode. In Modular-MON,
-                    we take a modular approach to multi-object navigation by
-                    employing the following modules: (1) Object detection (O),
-                    (2) Map building (M), (3) Exploration (E) and (4) Navigation (N ). These modules are intuitively
-                    weaved
-                    together.
-                    Modular-MON identifies objects (O) by observing the environment and builds a semantic map (M) by
-                    projecting
-                    information about category labels of the objects (i.e. semantics) in the field of view. If the agent
-                    has
-                    not
-                    yet discovered
-                    the current goal, gi, it will continue to explore (E). Once
-                    the current goal has been discovered, Modular-MON plans a
-                    path from its current location to the goal, and generates actions to navigate (N) towards the goal.
-                    We
-                    experiment with
-                    different exploration and navigation strategies to systematically investigate their contribution to
-                    the
-                    agent performance.
+                    <div class="col-lg-12 col-md-12 col-sm-12 col-xs-12 text-justify">
+
+                        <image class="intro-image" src="images/architecture.png" />
+
+                        <p class="text-justify">
+                            In the MultiON task, the agent is given the current goal
+                            gi from a set of N goals {g1, g2, ..., gN }. Once the agent has
+                            reached gi and generated the Found action successfully, it is
+                            given the next goal gi+1. This continues until the agent has
+                            found all the goals in the episode. In Modular-MON,
+                            we take a modular approach to multi-object navigation by
+                            employing the following modules: (1) Object detection (O),
+                            (2) Map building (M), (3) Exploration (E) and (4) Navigation (N ). These modules are
+                            intuitively
+                            weaved
+                            together.
+                            Modular-MON identifies objects (O) by observing the environment and builds a semantic map
+                            (M) by
+                            projecting
+                            information about category labels of the objects (i.e. semantics) in the field of view. If
+                            the agent
+                            has
+                            not
+                            yet discovered
+                            the current goal, gi, it will continue to explore (E). Once
+                            the current goal has been discovered, Modular-MON plans a
+                            path from its current location to the goal, and generates actions to navigate (N) towards
+                            the goal.
+                            We
+                            experiment with
+                            different exploration and navigation strategies to systematically investigate their
+                            contribution to
+                            the
+                            agent performance.
+                        </p>
+                    </div>
 
                 </div>
 
                 <div class="row">
                     <h2>Results</h2>
-                    <div class="results-table">
+                    &nbsp;
+                    <div class="col-lg-12 col-md-12 col-sm-12 col-xs-12 text-justify">
                         <img class="intro-image" src="images/results-table2.png" />
-                        We observe that the PredictedSem agent, which builds a map (M) using predicted
-                        semantic labels (O), performs better on cylinder (‘CYL’) objects than natural (‘NAT’) objects.
-                        We
-                        compare its performance with two oracle agents, OracleMap and OracleSem where ground-truth
-                        (‘GT’) is
-                        provided for either the
-                        mapping or object
-                        semantics. As expected, the performance are mostly identical for the two object types for
-                        OracleMap
-                        and
-                        OracleSem, since
-                        the placement of the objects are the same for both, with OracleMap outperforming OracleSem.
-                        These
-                        methods use Uniform
-                        Top-down Sampling w/ Fail-Safe (‘Uf’) as the Exploration (E) module and PointNav [52 ] (‘PN’) as
-                        the
-                        Navigation (N )
-                        module.
+
+                        <p>
+                            We observe that the PredictedSem agent, which builds a map (M) using predicted
+                            semantic labels (O), performs better on cylinder (‘CYL’) objects than natural (‘NAT’)
+                            objects.
+                            We
+                            compare its performance with two oracle agents, OracleMap and OracleSem where ground-truth
+                            (‘GT’) is
+                            provided for either the
+                            mapping or object
+                            semantics. As expected, the performance are mostly identical for the two object types for
+                            OracleMap
+                            and
+                            OracleSem, since
+                            the placement of the objects are the same for both, with OracleMap outperforming OracleSem.
+                            These
+                            methods use Uniform
+                            Top-down Sampling w/ Fail-Safe (‘Uf’) as the Exploration (E) module and PointNav [52 ]
+                            (‘PN’) as
+                            the
+                            Navigation (N )
+                            module.
+                        </p>
                         <p>&nbsp;</p>
                         <img class="intro-image" src="images/results-table3.png" />
-                        We also investigate how our Modular-MON performs on the
-                        Object Goal Navigation (ObjectNav) task in the above table. We observe that the performance
-                        deteriorates
-                        as we increase target objects, for
-                        a fixed step limit (rows 1-3). Our OracleSem performs similarly on the <a
-                            href="https://aihabitat.org/challenge/2022/">Habitat ObjectNav 2022</a> and MultiON 2.0 1ON
-                        val
-                        set (rows 5,6) when we set the step limit to 500 steps, following ObjectNav task setting. In
-                        ObjectNav,
-                        OracleSem
-                        performs better (rows 6,7) with Uniform Top-down Sampling w/ Fail-Safe (Uf) than Frontier (F).
-                        Moreover,
-                        our PredictedSem performs
-                        better on MultiON2.0 than on ObjectNav (rows 8,9).
+
+                        <p>
+                            We also investigate how our Modular-MON performs on the
+                            Object Goal Navigation (ObjectNav) task in the above table. We observe that the performance
+                            deteriorates
+                            as we increase target objects, for
+                            a fixed step limit (rows 1-3). Our OracleSem performs similarly on the <a
+                                href="https://aihabitat.org/challenge/2022/">Habitat ObjectNav 2022</a> and MultiON 2.0
+                            1ON
+                            val
+                            set (rows 5,6) when we set the step limit to 500 steps, following ObjectNav task setting. In
+                            ObjectNav,
+                            OracleSem
+                            performs better (rows 6,7) with Uniform Top-down Sampling w/ Fail-Safe (Uf) than Frontier
+                            (F).
+                            Moreover,
+                            our PredictedSem performs
+                            better on MultiON2.0 than on ObjectNav (rows 8,9).
+                        </p>
+
+                        <p>
+                            Below, we show a rollout of one of our episodes containing one target object.
+                        </p>
+
+                        <image src="images/rollout.gif" class="img-fluid" />
+
                     </div>
                 </div>
 
                 <div class="row">
                     <h2>Failure Cases</h2>
-                    <div class="col-lg-12 col-md-12 col-sm-12 col-xs-12">
-                        <image src="images/failure_cases_mon.png" class="img-fluid img-thumbnail rounded"
-                            style="width:45%;height:360px;" alt="failure-mon">
-                        </image>
-                        <image src="images/failure_cases_objnav.png" class="img-fluid img-thumbnail rounded"
-                            style="width:48%;height:360px;" alt="failure-objnav">
-                        </image>
-                        <figcaption class="text-center gif-img-caption">
-                            Failure cases for (a) Multi-Object Navigation, and (b) Object Navigation.
-                        </figcaption>
-                        <div>
-                            In the MultiON task, Modular-MON fails due to the agent
-                            running out of step limit, or stopping at a location far away
-                            from the goal. For those cases where the agent ran out
-                            of steps, it either has not yet discovered the goal or has
-                            discovered the goal but failed to stop within 1m of it.
-                            On the other hand, Modular-MON fails on the ObjectNav task since some episodes
-                            fail even when the agent is within 1m of the goal bounding
-                            box with the goal in sight.
+                    &nbsp;
+                    <div class="col-lg-12 col-md-12 col-sm-12 col-xs-12 text-justify">
+                        <div class="row">
+                            <div class="col-lg-2 col-md-2">&nbsp;&nbsp;</div>
+                            <div class="col-lg-8 col-md-8 col-sm-12 col-xs-12">
+                                <image src="images/failure_cases_mon.png" class="img-fluid img-thumbnail rounded"
+                                    alt="failure-mon">
+                                </image>
+                                <figcaption class="text-center gif-img-caption">
+                                    Failure cases for Multi-Object Navigation.
+                                </figcaption>
+                            </div>
+                        </div>
+                        <div class="row">
+                            <p class="text-justify">
+                                In the MultiON task, Modular-MON fails due to the agent
+                                running out of step limit, or stopping at a location far away
+                                from the goal. For those cases where the agent ran out
+                                of steps, it either has not yet discovered the goal or has
+                                discovered the goal but failed to stop within 1m of it.
+                                On the other hand, Modular-MON fails on the ObjectNav task since some episodes
+                                fail even when the agent is within 1m of the goal bounding
+                                box with the goal in sight.
+                            </p>
+                        </div>
+                        <div class="row">
+                            <div class="col-lg-2 col-md-2">&nbsp;&nbsp;</div>
+                            <div class="col-lg-8 col-md-8 col-sm-12 col-xs-12">
+                                <image src="images/failure_cases_objnav.png" class="img-fluid img-thumbnail rounded"
+                                    alt="failure-objnav">
+                                </image>
+                                <figcaption class="text-center gif-img-caption">
+                                    Failure cases for Object Navigation.
+                                </figcaption>
+                            </div>
                         </div>
                     </div>
 
