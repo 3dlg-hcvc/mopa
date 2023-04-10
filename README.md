@@ -1,8 +1,6 @@
 # Reduce, Reuse, Recycle: Modular Multi-Object Navigation
 
-This is an implementation of our paper [Reduce, Reuse, Recycle: Modular Multi-Object Navigation](https://3dlg-hcvc.github.io/rrr)
-
-Project Webpage: 
+This is an implementation of our paper [Reduce, Reuse, Recycle: Modular Multi-Object Navigation](http://arxiv.org/abs/2304.03696). [webpage](https://3dlg-hcvc.github.io/rrr)
 
 ![](docs/images/task_viz.gif)
 
@@ -152,12 +150,14 @@ python run.py  --exp-config baselines/config/pointnav/hier_w_proj_pred_sem_map_r
 
 ## Bibtex
 ```
-  @inproceedings{raychaudhuri2023rrr,
-  title={Reduce, Reuse, Recycle: Modular Multi-Object Navigation},
-  author={Sonia Raychaudhuri and Tommaso Campari and Unnat Jain and Manolis Savva and Angel X. Chang},
-  year={2023},
+  @misc{raychaudhuri2023reduce,
+    title={Reduce, Reuse, Recycle: Modular Multi-Object Navigation}, 
+    author={Sonia Raychaudhuri and Tommaso Campari and Unnat Jain and Manolis Savva and Angel X. Chang},
+    year={2023},
+    eprint={2304.03696},
+    archivePrefix={arXiv},
 }
 ```
 
 ## Acknowledgements
-This repository is built upon [Habitat Lab](https://github.com/facebookresearch/habitat-lab) and [multiON](https://github.com/3dlg-hcvc/multiON).
+The members at SFU were supported by Canada CIFAR AI Chair grant, Canada Research Chair grant, NSERC Discovery Grant and a research grant by Facebook AI Research. Experiments at SFU were enabled by support from WestGrid and Compute Canada. TC was supported by the PNRR project Future AI Research (FAIRPE00000013), under the NRRP MUR program funded by the NextGenerationEU. We also thank Angelica, Jiayi, Shawn, Bita, Yongsen, Arjun, Justin, Matthew, and Shivansh for comments on early drafts of this paper. This repository is built upon [Habitat Lab](https://github.com/facebookresearch/habitat-lab) and [multiON](https://github.com/3dlg-hcvc/multiON).

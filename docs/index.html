@@ -36,8 +36,8 @@
             </div>
 
             <div class="col-lg-12 col-md-12 col-sm-12 col-xs-12 text-center">
-                [<a href="#">GitHub</a>]
-                [<a href="#">Paper</a>]
+                [<a href="https://github.com/3dlg-hcvc/rrr">GitHub</a>]
+                [<a href="http://arxiv.org/abs/2304.03696">Paper</a>]
             </div>
 
         </div>
@@ -48,7 +48,9 @@
                     <div class="has-top-divider">&nbsp;</div>
                     <div class="col-lg-2 col-md-2 col-sm-2 col-xs-2"></div>
                     <div class="col-lg-10 col-md-10 col-sm-10 col-xs-10">
-                        <image src="images/task_viz.gif" class="img-fluid" />
+                        <a href="https://youtu.be/AM4wmO38f8g">
+                            <image src="images/task_viz.gif" class="img-fluid" />
+                        </a>
                     </div>
                 </div>
 
@@ -178,13 +180,13 @@
                             Below, we show a rollout of one of our episodes containing one target object.
                         </p>
 
-                        <image src="images/rollout.gif" class="img-fluid" />
+                        <a href="https://youtu.be/SBm50QlLi3M"><image src="images/rollout.gif" class="img-fluid" /></a>
 
                     </div>
                 </div>
 
                 <div class="row">
-                    <h2>Failure Cases</h2>
+                    <h2>Error Modes</h2>
                     &nbsp;
                     <div class="col-lg-12 col-md-12 col-sm-12 col-xs-12 text-justify">
                         <div class="row">
@@ -194,7 +196,7 @@
                                     alt="failure-mon">
                                 </image>
                                 <figcaption class="text-center gif-img-caption">
-                                    Failure cases for Multi-Object Navigation.
+                                    Error modes for Multi-Object Navigation.
                                 </figcaption>
                             </div>
                         </div>
@@ -205,9 +207,6 @@
                                 from the goal. For those cases where the agent ran out
                                 of steps, it either has not yet discovered the goal or has
                                 discovered the goal but failed to stop within 1m of it.
-                                On the other hand, Modular-MON fails on the ObjectNav task since some episodes
-                                fail even when the agent is within 1m of the goal bounding
-                                box with the goal in sight.
                             </p>
                         </div>
                         <div class="row">
@@ -217,19 +216,50 @@
                                     alt="failure-objnav">
                                 </image>
                                 <figcaption class="text-center gif-img-caption">
-                                    Failure cases for Object Navigation.
+                                    Error modes for Object Navigation.
                                 </figcaption>
                             </div>
+                        </div>
+                        <div class="row">
+                            <p class="text-justify">
+                                Modular-MON fails on the ObjectNav task mostly because the agent ran out of steps. Some
+                                episodes
+                                fail even when the agent is within 1m of the goal bounding
+                                box with the goal in sight, indicating that the viewpoints sampled for determining
+                                success in ObjectNav are sparse.
+                            </p>
                         </div>
                     </div>
 
                 </div>
 
                 <div class="row">
-                    <h2>Citation</h2>
-                    <p>If you find our work useful, please cite our paper below.<br></p>
-                    <div>
-                        &nbsp;
+                    <div class="col-md-8 col-md-offset-2">
+                        <h2>Citation</h2>
+                        <pre xml:space="preserve" style="display: block; font-size: 12px">
+@misc{raychaudhuri2023reduce,
+    title={Reduce, Reuse, Recycle: Modular Multi-Object Navigation}, 
+    author={Sonia Raychaudhuri and Tommaso Campari and Unnat Jain and Manolis Savva and Angel X. Chang},
+    year={2023},
+    eprint={2304.03696},
+    archivePrefix={arXiv},
+}
+                        </pre>
+                    </div>
+                </div>
+
+                <div class="row">
+                    <div class="col-md-8 col-md-offset-2">
+                        <h2>Acknowledgements</h2>
+                        <p class="text-justify">
+                            The members at SFU were supported by Canada CIFAR AI Chair grant, Canada Research Chair
+                            grant, NSERC Discovery Grant and a research grant by Facebook AI Research. Experiments at
+                            SFU
+                            were enabled by support from WestGrid and Compute Canada. TC was supported by the PNRR
+                            project Future AI Research (FAIRPE00000013), under the NRRP MUR program funded by the
+                            NextGenerationEU. We also thank Angelica, Jiayi, Shawn, Bita, Yongsen, Arjun, Justin,
+                            Matthew, and Shivansh for comments on early drafts of this paper.
+                        </p>
                     </div>
                 </div>
             </div>
