@@ -122,9 +122,9 @@ Download the pretrained PointNav model, trained on HM3D [here](https://github.co
 Download the following checkpoints for Object Detection and place under multi-obj-nav/data/object_detection_models:
 
 ```
-wget "https://aspis.cmpt.sfu.ca/projects/multion/rrr/pretrained_models/obj_det_real.ckpt"
-wget "https://aspis.cmpt.sfu.ca/projects/multion/rrr/pretrained_models/obj_det_cylinder.ckpt"
-wget "https://aspis.cmpt.sfu.ca/projects/multion/rrr/pretrained_models/knn_colors.pkl"
+wget "https://aspis.cmpt.sfu.ca/projects/multion/rrr/pretrained_models/obj_det_real.zip"
+wget "https://aspis.cmpt.sfu.ca/projects/multion/rrr/pretrained_models/obj_det_cylinder.zip"
+wget "https://aspis.cmpt.sfu.ca/projects/multion/rrr/pretrained_models/knn_colors.zip"
 ```
 
 ### Evaluation
