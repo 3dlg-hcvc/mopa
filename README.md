@@ -51,12 +51,12 @@ pip install -e .
 Clone the repository and install the requirements:
 
 ```
-git clone git@github.com:3dlg-hcvc/multi-obj-nav.git
-cd multi-obj-nav
+git clone git@github.com:3dlg-hcvc/rrr.git
+cd rrr
 python -m pip install -r requirements.txt
 ```
 ### Downloading data and checkpoints
-Download HM3D scenes [here](https://aihabitat.org/datasets/hm3d) and place the data in: `multi-obj-nav/data/scene_datasets/hm3d`. 
+Download HM3D scenes [here](https://aihabitat.org/datasets/hm3d) and place the data in: `rrr/data/scene_datasets/hm3d`. 
 
 Download objects:
 ```
@@ -64,7 +64,7 @@ wget -O multion_cyl_objects.zip "https://aspis.cmpt.sfu.ca/projects/multion-chal
 wget -O multion_real_objects.zip "https://aspis.cmpt.sfu.ca/projects/multion-challenge/2022/challenge/dataset/multion_real_objects"
 ```
 
-Extract them under `multi-obj-nav/data`.
+Extract them under `rrr/data`.
 
 Download the dataset.
 
@@ -74,10 +74,10 @@ Download the dataset.
 wget -O {n}_ON_{obj_type}_{split}.zip "https://aspis.cmpt.sfu.ca/projects/multion-challenge/2022/challenge/dataset/{n}_ON_{obj_type}_{split}"
 ```
 
-Extract them and place them inside `multi-obj-nav/data` in the following format:
+Extract them and place them inside `rrr/data` in the following format:
 
 ```
-multi-obj-nav/
+rrr/
   data/
     scene_datasets/
       hm3d/
@@ -117,9 +117,9 @@ multi-obj-nav/
 ## Usage
 
 ### Pre-trained models
-Download the pretrained PointNav model, trained on HM3D [here](https://github.com/facebookresearch/habitat-matterport3d-dataset/tree/main/pointnav_comparison#pre-trained-models) and update the path [here](https://github.com/3dlg-hcvc/multi-obj-nav/blob/2a12269a1ff0ad4aa6a7502403f69bee41c5f281/baselines/config/pointnav/hier_w_proj_pred_sem_map.yaml#L12) and [here](https://github.com/3dlg-hcvc/multi-obj-nav/blob/2a12269a1ff0ad4aa6a7502403f69bee41c5f281/baselines/config/pointnav/hier_w_proj_pred_sem_map.yaml#L92).
+Download the pretrained PointNav model, trained on HM3D [here](https://github.com/facebookresearch/habitat-matterport3d-dataset/tree/main/pointnav_comparison#pre-trained-models) and update the path [here](https://github.com/3dlg-hcvc/rrr/blob/main/baselines/config/pointnav/hier_w_proj_pred_sem_map.yaml#L12) and [here](https://github.com/3dlg-hcvc/rrr/blob/main/baselines/config/pointnav/hier_w_proj_pred_sem_map.yaml#L92).
 
-Download the following checkpoints for Object Detection and place under multi-obj-nav/data/object_detection_models:
+Download the following checkpoints for Object Detection and place under rrr/data/object_detection_models:
 
 ```
 wget "https://aspis.cmpt.sfu.ca/projects/multion/rrr/pretrained_models/obj_det_real.zip"
