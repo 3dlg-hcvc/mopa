@@ -1,6 +1,6 @@
-# Reduce, Reuse, Recycle: Modular Multi-Object Navigation
+# MOPA: Modular Object Navigation with PointGoal Agents
 
-This is an implementation of our paper [Reduce, Reuse, Recycle: Modular Multi-Object Navigation](http://arxiv.org/abs/2304.03696). [webpage](https://3dlg-hcvc.github.io/rrr)
+This is an implementation of our paper [MOPA: Modular Object Navigation with PointGoal Agents](https://arxiv.org/abs/2304.03696). [webpage](https://3dlg-hcvc.github.io/mopa)
 
 ![](docs/images/task_viz.gif)
 
@@ -146,16 +146,17 @@ python run.py  --exp-config baselines/config/pointnav/hier_w_proj_pred_sem_map_r
 ```
 
 ## Citation
->Sonia Raychaudhuri, Tommaso Campari, Unnat Jain, Manolis Savva, Angel X. Chang, 2023. Reduce, Reuse, Recycle: Modular Multi-Object Navigation. [PDF]()
+>Sonia Raychaudhuri, Tommaso Campari, Unnat Jain, Manolis Savva, Angel X. Chang, 2023. MOPA: Modular Object Navigation with PointGoal Agents. [PDF]()
 
 ## Bibtex
 ```
-  @misc{raychaudhuri2023reduce,
-    title={Reduce, Reuse, Recycle: Modular Multi-Object Navigation}, 
-    author={Sonia Raychaudhuri and Tommaso Campari and Unnat Jain and Manolis Savva and Angel X. Chang},
-    year={2023},
-    eprint={2304.03696},
-    archivePrefix={arXiv},
+  @misc{raychaudhuri2023mopa,
+      title={MOPA: Modular Object Navigation with PointGoal Agents}, 
+      author={Sonia Raychaudhuri and Tommaso Campari and Unnat Jain and Manolis Savva and Angel X. Chang},
+      year={2023},
+      eprint={2304.03696},
+      archivePrefix={arXiv},
+      primaryClass={cs.RO}
 }
 ```
 
