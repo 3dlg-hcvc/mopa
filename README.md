@@ -161,4 +161,4 @@ python run.py  --exp-config baselines/config/pointnav/hier_w_proj_pred_sem_map_r
 ```
 
 ## Acknowledgements
-The members at SFU were supported by Canada CIFAR AI Chair grant, Canada Research Chair grant, NSERC Discovery Grant and a research grant by Facebook AI Research. Experiments at SFU were enabled by support from WestGrid and Compute Canada. TC was supported by the PNRR project Future AI Research (FAIRPE00000013), under the NRRP MUR program funded by the NextGenerationEU. We also thank Angelica, Jiayi, Shawn, Bita, Yongsen, Arjun, Justin, Matthew, and Shivansh for comments on early drafts of this paper. This repository is built upon [Habitat Lab](https://github.com/facebookresearch/habitat-lab) and [multiON](https://github.com/3dlg-hcvc/multiON).
+The members at SFU were supported by Canada CIFAR AI Chair grant, Canada Research Chair grant, NSERC Discovery Grant and a research grant by Facebook AI Research. Experiments at SFU were enabled by support from WestGrid and Compute Canada. This repository is built upon [Habitat Lab](https://github.com/facebookresearch/habitat-lab) and [multiON](https://github.com/3dlg-hcvc/multiON).
