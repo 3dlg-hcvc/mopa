@@ -52,11 +52,11 @@ Clone the repository and install the requirements:
 
 ```
 git clone git@github.com:3dlg-hcvc/mopa.git
-cd rrr
+cd mopa
 python -m pip install -r requirements.txt
 ```
 ### Downloading data and checkpoints
-Download HM3D scenes [here](https://aihabitat.org/datasets/hm3d) and place the data in: `rrr/data/scene_datasets/hm3d`. 
+Download HM3D scenes [here](https://aihabitat.org/datasets/hm3d) and place the data in: `mopa/data/scene_datasets/hm3d`. 
 
 Download objects:
 ```
@@ -64,7 +64,7 @@ wget -O multion_cyl_objects.zip "https://aspis.cmpt.sfu.ca/projects/multion-chal
 wget -O multion_real_objects.zip "https://aspis.cmpt.sfu.ca/projects/multion-challenge/2022/challenge/dataset/multion_real_objects"
 ```
 
-Extract them under `rrr/data`.
+Extract them under `mopa/data`.
 
 Download the dataset.
 
@@ -74,10 +74,10 @@ Download the dataset.
 wget -O {n}_ON_{obj_type}_{split}.zip "https://aspis.cmpt.sfu.ca/projects/multion-challenge/2022/challenge/dataset/{n}_ON_{obj_type}_{split}"
 ```
 
-Extract them and place them inside `rrr/data` in the following format:
+Extract them and place them inside `mopa/data` in the following format:
 
 ```
-rrr/
+mopa/
   data/
     scene_datasets/
       hm3d/
@@ -119,7 +119,7 @@ rrr/
 ### Pre-trained models
 Download the pretrained PointNav model, trained on HM3D [here](https://github.com/facebookresearch/habitat-matterport3d-dataset/tree/main/pointnav_comparison#pre-trained-models) and update the path [here](https://github.com/3dlg-hcvc/mopa/blob/main/baselines/config/pointnav/hier_w_proj_pred_sem_map.yaml#L12) and [here](https://github.com/3dlg-hcvc/mopa/blob/main/baselines/config/pointnav/hier_w_proj_pred_sem_map.yaml#L92).
 
-Download the following checkpoints for Object Detection and place under rrr/data/object_detection_models:
+Download the following checkpoints for Object Detection and place under mopa/data/object_detection_models:
 
 ```
 wget "https://aspis.cmpt.sfu.ca/projects/multion/mopa/pretrained_models/obj_det_real.zip"
