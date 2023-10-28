@@ -1,6 +1,6 @@
 # MOPA: Modular Object Navigation with PointGoal Agents
 
-This is an implementation of our paper [MOPA: Modular Object Navigation with PointGoal Agents](https://arxiv.org/abs/2304.03696). [webpage](https://3dlg-hcvc.github.io/rrr)
+This is an implementation of our paper [MOPA: Modular Object Navigation with PointGoal Agents](https://arxiv.org/abs/2304.03696). [webpage](https://3dlg-hcvc.github.io/mopa)
 
 ![](docs/images/task_viz.gif)
 
@@ -51,7 +51,7 @@ pip install -e .
 Clone the repository and install the requirements:
 
 ```
-git clone git@github.com:3dlg-hcvc/rrr.git
+git clone git@github.com:3dlg-hcvc/mopa.git
 cd rrr
 python -m pip install -r requirements.txt
 ```
@@ -117,14 +117,14 @@ rrr/
 ## Usage
 
 ### Pre-trained models
-Download the pretrained PointNav model, trained on HM3D [here](https://github.com/facebookresearch/habitat-matterport3d-dataset/tree/main/pointnav_comparison#pre-trained-models) and update the path [here](https://github.com/3dlg-hcvc/rrr/blob/main/baselines/config/pointnav/hier_w_proj_pred_sem_map.yaml#L12) and [here](https://github.com/3dlg-hcvc/rrr/blob/main/baselines/config/pointnav/hier_w_proj_pred_sem_map.yaml#L92).
+Download the pretrained PointNav model, trained on HM3D [here](https://github.com/facebookresearch/habitat-matterport3d-dataset/tree/main/pointnav_comparison#pre-trained-models) and update the path [here](https://github.com/3dlg-hcvc/mopa/blob/main/baselines/config/pointnav/hier_w_proj_pred_sem_map.yaml#L12) and [here](https://github.com/3dlg-hcvc/mopa/blob/main/baselines/config/pointnav/hier_w_proj_pred_sem_map.yaml#L92).
 
 Download the following checkpoints for Object Detection and place under rrr/data/object_detection_models:
 
 ```
-wget "https://aspis.cmpt.sfu.ca/projects/multion/rrr/pretrained_models/obj_det_real.zip"
-wget "https://aspis.cmpt.sfu.ca/projects/multion/rrr/pretrained_models/obj_det_cylinder.zip"
-wget "https://aspis.cmpt.sfu.ca/projects/multion/rrr/pretrained_models/knn_colors.zip"
+wget "https://aspis.cmpt.sfu.ca/projects/multion/mopa/pretrained_models/obj_det_real.zip"
+wget "https://aspis.cmpt.sfu.ca/projects/multion/mopa/pretrained_models/obj_det_cylinder.zip"
+  wget "https://aspis.cmpt.sfu.ca/projects/multion/mopa/pretrained_models/knn_colors.zip"
 ```
 
 ### Evaluation
