@@ -1,6 +1,6 @@
 # MOPA: Modular Object Navigation with PointGoal Agents
 
-This is an implementation of our paper [MOPA: Modular Object Navigation with PointGoal Agents](https://arxiv.org/abs/2304.03696). [webpage](https://3dlg-hcvc.github.io/mopa)
+This is an implementation of our paper [MOPA: Modular Object Navigation with PointGoal Agents]([https://arxiv.org/abs/2304.03696](https://openaccess.thecvf.com/content/WACV2024/html/Raychaudhuri_MOPA_Modular_Object_Navigation_With_PointGoal_Agents_WACV_2024_paper.html)). [webpage](https://3dlg-hcvc.github.io/mopa)
 
 ![](docs/images/task_viz.gif)
 
